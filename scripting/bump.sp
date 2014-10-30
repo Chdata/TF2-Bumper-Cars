@@ -11,7 +11,7 @@
 #include <tf2_stocks>
 //#include <sdkhooks>
 
-#define PLUGIN_VERSION                  "0x01"
+#define PLUGIN_VERSION "0x02"
 
 enum
 {
@@ -27,6 +27,8 @@ enum
 
 new Handle:g_cvTeamOnly;
 new iCatTeam;
+
+new bool:bWasDriving[MAXPLAYERS + 1] = {false,...};
 
 public Plugin:myinfo = {
     name = "Bumpa cars",
@@ -56,8 +58,6 @@ public OnPluginStart()
     AutoExecConfig(true, "plugin.bumpercar");
 
     RegAdminCmd("sm_bumpercar", Command_BumperCar, 0, "sm_car <noparam|#userid|name> <noparam|on|off> - Toggles bumper car on all targets or self");
-    RegAdminCmd("sm_bumper", Command_BumperCar, 0, "sm_car <noparam|#userid|name> <noparam|on|off> - Toggles bumper car on all targets or self");
-    RegAdminCmd("sm_bump", Command_BumperCar, 0, "sm_car <noparam|#userid|name> <noparam|on|off> - Toggles bumper car on all targets or self");
     RegAdminCmd("sm_car", Command_BumperCar, 0, "sm_car <noparam|#userid|name> <noparam|on|off> - Toggles bumper car on all targets or self");
 
     AddMultiTargetFilter("@cars", CarTargetFilter, "all drivers", false);
@@ -109,13 +109,32 @@ public bool:CarTargetFilter(const String:pattern[], Handle:clients)
     return true;
 }
 
-/*public TF2_OnConditionAdded(client, TFCond:cond)
+public TF2_OnConditionAdded(client, TFCond:cond)
 {
     if (cond == TFCond:_JarateSwimming)
     {
-        TF2_RemoveCondition(client, TFCond:_BumperCar);
+        if (TF2_IsPlayerInCondition(client, TFCond:_BumperCar))
+        {
+            bWasDriving[client] = true;
+            TF2_RemoveCondition(client, TFCond:_BumperCar);
+        }
+        else
+        {
+            bWasDriving[client] = false;
+        }
     }
-}*/
+}
+
+public TF2_OnConditionRemoved(client, TFCond:cond)
+{
+    if (cond == TFCond:_JarateSwimming)
+    {
+        if (bWasDriving[client] && !TF2_IsPlayerInCondition(client, TFCond_HalloweenGhostMode))
+        {
+            TF2_AddCondition(client, TFCond:_BumperCar, TFCondDuration_Infinite);
+        }
+    }
+}
 
 public Action:Command_BumperCar(client, argc)
 {
@@ -162,6 +181,12 @@ public Action:Command_BumperCar(client, argc)
             return Plugin_Handled;
         }
 
+        if (bSelf)
+        {
+            SelfEnterCar(client);
+            return Plugin_Handled;
+        }
+
         decl String:target_name[MAX_TARGET_LENGTH];
         decl target_list[MAXPLAYERS], target_count, bool:tn_is_ml;
         
@@ -183,6 +208,12 @@ public Action:Command_BumperCar(client, argc)
             if (target_count == 1)
             {
                 bOn = !TF2_IsPlayerInCondition(target_list[0], TFCond:_BumperCar);
+
+                if (target_list[0] == client)
+                {
+                    SelfEnterCar(client);
+                    return Plugin_Handled;
+                }
             }
             else if (target_count > 1 && argc < 2)
             {
@@ -196,29 +227,21 @@ public Action:Command_BumperCar(client, argc)
 
             // IntToString(_:bOn, arg2, sizeof(arg2));
 
-            if (bSelf)
+            for (new i = 0; i < target_count; i++)
             {
-                SelfEnterCar(target_list[0]);
-                return Plugin_Handled;
-            }
-            else
-            {
-                for (new i = 0; i < target_count; i++)
+                if (bOn)
                 {
-                    if (bOn)
-                    {
-                        TryEnterCar(target_list[i]);
-                    }
-                    else
-                    {
-                        TF2_RemoveCondition(target_list[i], TFCond:_BumperCar);
-                    }
-
-                    //if (AreClientCookiesCached(target_list[i]))
-                    //{
-                    //    SetClientCookie(target_list[i], g_cCarCookie, arg2);
-                    //}
+                    TryEnterCar(target_list[i]);
                 }
+                else
+                {
+                    TF2_RemoveCondition(target_list[i], TFCond:_BumperCar);
+                }
+
+                //if (AreClientCookiesCached(target_list[i]))
+                //{
+                //    SetClientCookie(target_list[i], g_cCarCookie, arg2);
+                //}
             }
             
             ShowActivity2(client, "[SM] ", "%sed bumper car on %s.", !bOn?"Remov":"Add", target_name);
