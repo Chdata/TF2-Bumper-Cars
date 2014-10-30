@@ -4,6 +4,12 @@
 
  Thanks to Dr. McKay for the model fix.
 
+ m_flKartNextAvailableBoost
+ m_iKartHealth
+ m_iKartState
+ m_flTorsoScale
+ m_flHandScale 
+
 */
 
 #pragma semicolon 1
@@ -11,7 +17,7 @@
 #include <tf2_stocks>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION "0x03"
+#define PLUGIN_VERSION "0x04"
 
 enum
 {
@@ -32,8 +38,8 @@ new Handle:g_cvBoostTime;
 new Float:g_flBoostTime;
 new Float:g_flActivateFrame[MAXPLAYERS + 1] = {-1.0,...};
 
-//new Handle:g_cvHeadScale;
-//new Float:g_flHeadScale;
+new Handle:g_cvHeadScale;
+new Float:g_flHeadScale;
 
 new bool:bWasDriving[MAXPLAYERS + 1] = {false,...};
 
@@ -67,16 +73,16 @@ public OnPluginStart()
         true, -1.0, true, 999999.0
     );
 
-    /*g_cvHeadScale = CreateConVar(
+    g_cvHeadScale = CreateConVar(
         "cv_bumpercar_headscale", "3.0",
         "Player head scale when put into a bumper car.",
         FCVAR_PLUGIN|FCVAR_NOTIFY,
         true, 0.1, true, 3.0
-    );*/
+    );
 
     HookConVarChange(g_cvTeamOnly, CvarChange);
     HookConVarChange(g_cvBoostTime, CvarChange);
-    //HookConVarChange(g_cvHeadScale, CvarChange);
+    HookConVarChange(g_cvHeadScale, CvarChange);
 
     AutoExecConfig(true, "plugin.bumpercar");
 
@@ -101,7 +107,7 @@ public OnConfigsExecuted()
 {
     g_iCatTeam = GetConVarInt(g_cvTeamOnly);
     g_flBoostTime = GetConVarFloat(g_cvBoostTime);
-    //g_flHeadScale = GetConVarFloat(g_cvHeadScale);
+    g_flHeadScale = GetConVarFloat(g_cvHeadScale);
 }
 
 public CvarChange(Handle:hCvar, const String:oldValue[], const String:newValue[])
@@ -114,10 +120,10 @@ public CvarChange(Handle:hCvar, const String:oldValue[], const String:newValue[]
     {
         g_flBoostTime = GetConVarFloat(g_cvBoostTime);
     }
-    /*else // if (hCvar == g_cvHeadScale)
+    else // if (hCvar == g_cvHeadScale)
     {
         g_flHeadScale = GetConVarFloat(g_cvHeadScale);
-    }*/
+    }
 }
 
 public OnClientPostAdminCheck(client)
@@ -223,11 +229,14 @@ public TF2_OnConditionAdded(client, TFCond:cond)
                 bWasDriving[client] = false;
             }
         }
-        /*case (TFCond:_BumperCar):
+        case (TFCond:_BumperCar):
         {
-            //if (g_flHeadScale != 3.0)
-            RequestFrame(Post_CarEnable, GetClientUserId(client));
-        }*/
+            if (g_flHeadScale != 3.0)
+            {
+                SDKHook(client, SDKHook_PostThinkPost, OnPostThinkPost);
+            }
+            //RequestFrame(Post_CarEnable, GetClientUserId(client));
+        }
         case (TFCond:_KartSpeedBoost):
         {
             if (g_flBoostTime != 1.5)
@@ -239,7 +248,11 @@ public TF2_OnConditionAdded(client, TFCond:cond)
 
                     if (g_flBoostTime == -1.0)
                     {
-                        g_flActivateFrame[client] = GetGameTime();
+                        SetEntPropFloat(client, Prop_Send, "m_flKartNextAvailableBoost", GetGameTime()+999999.0);
+                    }
+                    else
+                    {
+                        SetEntPropFloat(client, Prop_Send, "m_flKartNextAvailableBoost", GetGameTime()+g_flBoostTime);
                     }
                 }
             }
@@ -249,9 +262,11 @@ public TF2_OnConditionAdded(client, TFCond:cond)
 
 public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:angles[3], &weapon)
 {
-    if (g_flBoostTime < 0 && bool:(buttons & IN_ATTACK2) && (GetGameTime() - g_flActivateFrame[client])>0.5)
+    if (bool:(buttons & IN_ATTACK2) && g_flBoostTime < 0 && (GetGameTime() - g_flActivateFrame[client])>0.5)
     {
         TF2_RemoveCondition(client, TFCond:_KartSpeedBoost);
+        SetEntPropFloat(client, Prop_Send, "m_flKartNextAvailableBoost", GetGameTime());
+        g_flActivateFrame[client] = GetGameTime();
     }
 }
 
@@ -275,7 +290,23 @@ public TF2_OnConditionRemoved(client, TFCond:cond)
                 TF2_AddCondition(client, TFCond:_BumperCar, TFCondDuration_Infinite);
             }
         }
+        case (TFCond:_BumperCar):
+        {
+            SDKUnhook(client, SDKHook_PostThinkPost, OnPostThinkPost);
+        }
+        case (TFCond:_KartSpeedBoost):
+        {
+            if (g_flBoostTime < 0)
+            {
+                SetEntPropFloat(client, Prop_Send, "m_flKartNextAvailableBoost", GetGameTime());
+            }
+        }
     }
+}
+
+public OnPostThinkPost(client)
+{
+    SetEntPropFloat(client, Prop_Send, "m_flHeadScale", g_flHeadScale);
 }
 
 public Action:Command_BumperCar(client, argc)
