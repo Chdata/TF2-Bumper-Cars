@@ -17,7 +17,7 @@
 #include <tf2_stocks>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION "0x04"
+#define PLUGIN_VERSION "0x05"
 
 enum
 {
@@ -36,7 +36,7 @@ new g_iCatTeam;
 
 new Handle:g_cvBoostTime;
 new Float:g_flBoostTime;
-new Float:g_flActivateFrame[MAXPLAYERS + 1] = {-1.0,...};
+//new Float:g_flActivateFrame[MAXPLAYERS + 1] = {-1.0,...};
 
 new Handle:g_cvHeadScale;
 new Float:g_flHeadScale;
@@ -107,6 +107,11 @@ public OnConfigsExecuted()
 {
     g_iCatTeam = GetConVarInt(g_cvTeamOnly);
     g_flBoostTime = GetConVarFloat(g_cvBoostTime);
+    if (g_flBoostTime < 0)
+    {
+        g_flBoostTime = -1.0;
+    }
+
     g_flHeadScale = GetConVarFloat(g_cvHeadScale);
 }
 
@@ -119,6 +124,10 @@ public CvarChange(Handle:hCvar, const String:oldValue[], const String:newValue[]
     else if (hCvar == g_cvBoostTime)
     {
         g_flBoostTime = GetConVarFloat(g_cvBoostTime);
+        if (g_flBoostTime < 0)
+        {
+            g_flBoostTime = -1.0;
+        }
     }
     else // if (hCvar == g_cvHeadScale)
     {
@@ -133,7 +142,7 @@ public OnClientPostAdminCheck(client)
 
 public Action:OnTakeDamage(iVictim, &iAtker, &iInflictor, &Float:flDamage, &iDmgType, &iWeapon, Float:vDmgForce[3], Float:vDmgPos[3], iDmgCustom)
 {
-    if (0 < iVictim && iVictim <= MaxClients)
+    if (IsValidClient(iVictim))
     {
         if (TF2_IsPlayerInCondition(iVictim, TFCond:_BumperCar))
         {
@@ -144,7 +153,7 @@ public Action:OnTakeDamage(iVictim, &iAtker, &iInflictor, &Float:flDamage, &iDmg
                 ForcePlayerSuicide(iVictim);
             }
         }
-        else if (!TF2_IsPlayerInCondition(iVictim, TFCond:_BumperCar) && TF2_IsPlayerInCondition(iAtker, TFCond:_BumperCar))
+        else if (IsValidClient(iAtker) && !TF2_IsPlayerInCondition(iVictim, TFCond:_BumperCar) && TF2_IsPlayerInCondition(iAtker, TFCond:_BumperCar))
         {
             flDamage *= 2.0;
             return Plugin_Changed;
@@ -260,7 +269,7 @@ public TF2_OnConditionAdded(client, TFCond:cond)
     }
 }
 
-public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:angles[3], &weapon)
+/*public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:angles[3], &weapon)
 {
     if (bool:(buttons & IN_ATTACK2) && g_flBoostTime < 0 && (GetGameTime() - g_flActivateFrame[client])>0.5)
     {
@@ -268,7 +277,7 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
         SetEntPropFloat(client, Prop_Send, "m_flKartNextAvailableBoost", GetGameTime());
         g_flActivateFrame[client] = GetGameTime();
     }
-}
+}*/
 
 /*public Post_CarEnable(any:data)
 {
@@ -509,4 +518,11 @@ stock SelfEnterCar(client) // , iOn=-1
             ReplyToCommand(client, "[SM] You can't ride a bumper car in your current state.");
         }
     }
+}
+
+stock bool:IsValidClient(iClient)
+{
+    if (iClient <= 0 || iClient > MaxClients || !IsClientInGame(iClient)) return false;
+    if (GetEntProp(iClient, Prop_Send, "m_bIsCoaching")) return false;
+    return true;
 }
