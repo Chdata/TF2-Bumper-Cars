@@ -9,9 +9,9 @@
 #pragma semicolon 1
 #include <sourcemod>
 #include <tf2_stocks>
-//#include <sdkhooks>
+#include <sdkhooks>
 
-#define PLUGIN_VERSION "0x02"
+#define PLUGIN_VERSION "0x03"
 
 enum
 {
@@ -26,7 +26,14 @@ enum
 }
 
 new Handle:g_cvTeamOnly;
-new iCatTeam;
+new g_iCatTeam;
+
+new Handle:g_cvBoostTime;
+new Float:g_flBoostTime;
+new Float:g_flActivateFrame[MAXPLAYERS + 1] = {-1.0,...};
+
+//new Handle:g_cvHeadScale;
+//new Float:g_flHeadScale;
 
 new bool:bWasDriving[MAXPLAYERS + 1] = {false,...};
 
@@ -53,7 +60,23 @@ public OnPluginStart()
         true, 0.0, true, 3.0
     );
 
+    g_cvBoostTime = CreateConVar(
+        "cv_bumpercar_boosttime", "1.5",
+        "Boost duration for any boosts. -1.0 = infinite until right mouse clicked again. 0.0 = disable boosting",
+        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        true, -1.0, true, 999999.0
+    );
+
+    /*g_cvHeadScale = CreateConVar(
+        "cv_bumpercar_headscale", "3.0",
+        "Player head scale when put into a bumper car.",
+        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        true, 0.1, true, 3.0
+    );*/
+
     HookConVarChange(g_cvTeamOnly, CvarChange);
+    HookConVarChange(g_cvBoostTime, CvarChange);
+    //HookConVarChange(g_cvHeadScale, CvarChange);
 
     AutoExecConfig(true, "plugin.bumpercar");
 
@@ -64,25 +87,100 @@ public OnPluginStart()
     AddMultiTargetFilter("@!cars", CarTargetFilter, "all non-drivers", false);
 
     LoadTranslations("common.phrases");
+
+    for (new i = 1; i <= MaxClients; i++)
+    {
+        if (IsClientInGame(i))
+        {
+            SDKHook(i, SDKHook_OnTakeDamage, OnTakeDamage);
+        }
+    }
 }
 
 public OnConfigsExecuted()
 {
-    iCatTeam = GetConVarInt(g_cvTeamOnly);
+    g_iCatTeam = GetConVarInt(g_cvTeamOnly);
+    g_flBoostTime = GetConVarFloat(g_cvBoostTime);
+    //g_flHeadScale = GetConVarFloat(g_cvHeadScale);
 }
 
 public CvarChange(Handle:hCvar, const String:oldValue[], const String:newValue[])
 {
     if (hCvar == g_cvTeamOnly)
     {
-        iCatTeam = GetConVarInt(hCvar);
+        g_iCatTeam = GetConVarInt(g_cvTeamOnly);
     }
+    else if (hCvar == g_cvBoostTime)
+    {
+        g_flBoostTime = GetConVarFloat(g_cvBoostTime);
+    }
+    /*else // if (hCvar == g_cvHeadScale)
+    {
+        g_flHeadScale = GetConVarFloat(g_cvHeadScale);
+    }*/
+}
+
+public OnClientPostAdminCheck(client)
+{
+    SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
+}
+
+public Action:OnTakeDamage(iVictim, &iAtker, &iInflictor, &Float:flDamage, &iDmgType, &iWeapon, Float:vDmgForce[3], Float:vDmgPos[3], iDmgCustom)
+{
+    if (0 < iVictim && iVictim <= MaxClients)
+    {
+        if (TF2_IsPlayerInCondition(iVictim, TFCond:_BumperCar))
+        {
+            decl String:s[16];
+            GetEdictClassname(iAtker, s, sizeof(s));
+            if (StrEqual(s, "trigger_hurt", false))
+            {
+                ForcePlayerSuicide(iVictim);
+            }
+        }
+        else if (!TF2_IsPlayerInCondition(iVictim, TFCond:_BumperCar) && TF2_IsPlayerInCondition(iAtker, TFCond:_BumperCar))
+        {
+            flDamage *= 2.0;
+            return Plugin_Changed;
+        }
+    }
+
+    return Plugin_Continue;
 }
 
 public OnMapStart()
 {
     PrecacheModel("models/player/items/taunts/bumpercar/parts/bumpercar.mdl");
     PrecacheModel("models/player/items/taunts/bumpercar/parts/bumpercar_nolights.mdl");
+
+    PrecacheSound("weapons/bumper_car_speed_boost_start.wav", true);
+    PrecacheSound("weapons/bumper_car_speed_boost_stop.wav", true);
+
+    /*PrecacheSound("weapons/buffed_off.wav", true);
+    PrecacheSound("weapons/buffed_on.wav"", true);
+
+    PrecacheSound("weapons/bumper_car_hit_ball.wav", true);
+    PrecacheSound("weapons/bumper_car_hit_ghost.wav", true);
+    PrecacheSound("weapons/bumper_car_hit_hard.wav", true);
+    PrecacheSound("weapons/bumper_car_hit_into_air.wav", true);
+    PrecacheSound("weapons/bumper_car_spawn.wav", true);
+    PrecacheSound("weapons/bumper_car_spawn_from_lava.wav", true);
+
+    PrecacheSound("weapons/bumper_car_accelerate.wav", true); // These seem to already always work.
+    PrecacheSound("weapons/bumper_car_decelerate.wav", true);
+    PrecacheSound("weapons/bumper_car_decelerate_quick.wav", true);
+    PrecacheSound("weapons/bumper_car_go_loop.wav", true);
+    PrecacheSound("weapons/bumper_car_hit1.wav", true);
+    PrecacheSound("weapons/bumper_car_hit2.wav", true);
+    PrecacheSound("weapons/bumper_car_hit3.wav", true);
+    PrecacheSound("weapons/bumper_car_hit4.wav", true);
+    PrecacheSound("weapons/bumper_car_hit5.wav", true);
+    PrecacheSound("weapons/bumper_car_hit6.wav", true);
+    PrecacheSound("weapons/bumper_car_hit7.wav", true);
+    PrecacheSound("weapons/bumper_car_hit8.wav", true);
+    PrecacheSound("weapons/bumper_car_jump.wav", true);
+    PrecacheSound("weapons/bumper_car_jump_land.wav", true);
+    PrecacheSound("weapons/bumper_car_screech.wav", true);*/
 }
 
 public bool:CarTargetFilter(const String:pattern[], Handle:clients)
@@ -111,27 +209,71 @@ public bool:CarTargetFilter(const String:pattern[], Handle:clients)
 
 public TF2_OnConditionAdded(client, TFCond:cond)
 {
-    if (cond == TFCond:_JarateSwimming)
+    switch (cond)
     {
-        if (TF2_IsPlayerInCondition(client, TFCond:_BumperCar))
+        case (TFCond:_JarateSwimming), TFCond_Taunting:
         {
-            bWasDriving[client] = true;
-            TF2_RemoveCondition(client, TFCond:_BumperCar);
+            if (TF2_IsPlayerInCondition(client, TFCond:_BumperCar))
+            {
+                bWasDriving[client] = true;
+                TF2_RemoveCondition(client, TFCond:_BumperCar);
+            }
+            else
+            {
+                bWasDriving[client] = false;
+            }
         }
-        else
+        /*case (TFCond:_BumperCar):
         {
-            bWasDriving[client] = false;
+            //if (g_flHeadScale != 3.0)
+            RequestFrame(Post_CarEnable, GetClientUserId(client));
+        }*/
+        case (TFCond:_KartSpeedBoost):
+        {
+            if (g_flBoostTime != 1.5)
+            {
+                TF2_RemoveCondition(client, TFCond:_KartSpeedBoost);
+                if (g_flBoostTime != 0.0)
+                {
+                    TF2_AddCondition(client, TFCond:_KartSpeedBoost, g_flBoostTime);
+
+                    if (g_flBoostTime == -1.0)
+                    {
+                        g_flActivateFrame[client] = GetGameTime();
+                    }
+                }
+            }
         }
     }
 }
 
+public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:angles[3], &weapon)
+{
+    if (g_flBoostTime < 0 && bool:(buttons & IN_ATTACK2) && (GetGameTime() - g_flActivateFrame[client])>0.5)
+    {
+        TF2_RemoveCondition(client, TFCond:_KartSpeedBoost);
+    }
+}
+
+/*public Post_CarEnable(any:data)
+{
+    new client = GetClientOfUserId(data);
+    if (0 < client && client <= MaxClients && IsClientInGame(client))
+    {
+        SetEntPropFloat(client, Prop_Send, "m_flHeadScale", g_flHeadScale);
+    }
+}*/
+
 public TF2_OnConditionRemoved(client, TFCond:cond)
 {
-    if (cond == TFCond:_JarateSwimming)
+    switch (cond)
     {
-        if (bWasDriving[client] && !TF2_IsPlayerInCondition(client, TFCond_HalloweenGhostMode))
+        case (TFCond:_JarateSwimming), TFCond_Taunting:
         {
-            TF2_AddCondition(client, TFCond:_BumperCar, TFCondDuration_Infinite);
+            if (bWasDriving[client] && !TF2_IsPlayerInCondition(client, TFCond_HalloweenGhostMode))
+            {
+                TF2_AddCondition(client, TFCond:_BumperCar, TFCondDuration_Infinite);
+            }
         }
     }
 }
@@ -207,11 +349,18 @@ public Action:Command_BumperCar(client, argc)
 
             if (target_count == 1)
             {
-                bOn = !TF2_IsPlayerInCondition(target_list[0], TFCond:_BumperCar);
-
+                if (argc == 1)
+                {
+                    bOn = !TF2_IsPlayerInCondition(target_list[0], TFCond:_BumperCar);
+                }
+                else
+                {
+                    bOn = (StrEqual(arg2, "on") || arg2[0] == '1');
+                }
+                
                 if (target_list[0] == client)
                 {
-                    SelfEnterCar(client);
+                    SelfEnterCar(client); // _:bOn
                     return Plugin_Handled;
                 }
             }
@@ -263,7 +412,7 @@ public Action:Command_BumperCar(client, argc)
 
 stock bool:TryEnterCar(client)
 {
-    if (!TF2_IsPlayerInCondition(client, TFCond:_JarateSwimming) && !TF2_IsPlayerInCondition(client, TFCond_HalloweenGhostMode))
+    if (!TF2_IsPlayerInCondition(client, TFCond:_JarateSwimming) && !TF2_IsPlayerInCondition(client, TFCond_HalloweenGhostMode) && !TF2_IsPlayerInCondition(client, TFCond_Taunting))
     {
         TF2_AddCondition(client, TFCond:_BumperCar, TFCondDuration_Infinite);
         return true;
@@ -271,11 +420,11 @@ stock bool:TryEnterCar(client)
     return false;
 }
 
-stock SelfEnterCar(client)
+stock SelfEnterCar(client) // , iOn=-1
 {
-    if ((iCatTeam == 2 || iCatTeam == 3) && GetClientTeam(client) != iCatTeam)
+    if ((g_iCatTeam == 2 || g_iCatTeam == 3) && GetClientTeam(client) != g_iCatTeam)
     {
-        ReplyToCommand(client, "[SM] Only %s team can toggle riding bumper cars.", iCatTeam == 2 ? "red" : "blu");
+        ReplyToCommand(client, "[SM] Only %s team can toggle riding bumper cars.", g_iCatTeam == 2 ? "red" : "blu");
         return;
     }
 
@@ -284,6 +433,34 @@ stock SelfEnterCar(client)
         ReplyToCommand(client, "[SM] You must be alive to ride bumper cars.");
         return;
     }
+
+    /*if (iOn != -1)
+    {
+        if (bool:iOn)
+        {
+            if (TF2_IsPlayerInCondition(client, TFCond:_BumperCar))
+            {
+                ReplyToCommand(client, "[SM] You are now still riding a bumper car!");
+            }
+            else
+            {
+                if (TryEnterCar(client))
+                {
+                    ReplyToCommand(client, "[SM] You are now riding a bumper car!");
+                }
+                else
+                {
+                    ReplyToCommand(client, "[SM] You can't ride a bumper car in your current state.");
+                }
+            }
+        }
+        else
+        {
+            // lol this is silly
+        }
+
+        return;
+    }*/
 
     if (TF2_IsPlayerInCondition(client, TFCond:_BumperCar))
     {
