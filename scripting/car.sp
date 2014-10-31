@@ -2,17 +2,7 @@
  Bumper Car Plugin
  By: Chdata
 
- Thanks to Dr. McKay for the model fix.
-
- m_flKartNextAvailableBoost
- m_iKartHealth
- m_iKartState
- m_flTorsoScale
- m_flHandScale 
-
- +back = disable boost
-
- cvar_ only change cart state on spawn
+ Thanks to Dr. McKay for making the first kart plugin.
 
 */
 
@@ -21,7 +11,7 @@
 #include <tf2_stocks>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION "0x09"
+#define PLUGIN_VERSION "0x10"
 
 enum
 {
@@ -77,7 +67,7 @@ public OnPluginStart()
 
     g_cvTeamOnly = CreateConVar(
         "cv_bumpercar_teamonly", "0",
-        "0 = Anyone can enter bumper cars via command | 2 = Only red | 3 = Only blu | Anything else = Anyone can",
+        "0 = Anyone can enter bumper cars | 2 = Only red | 3 = Only blu | Anything else = Anyone can",
         FCVAR_PLUGIN|FCVAR_NOTIFY,
         true, 0.0, true, 3.0
     );
@@ -98,7 +88,7 @@ public OnPluginStart()
 
     g_cvKeepCar = CreateConVar(
         "cv_bumpercar_respawn", "1",
-        "1 = Keep car on respawn | 0 = Lose car after death | 2 = Everyone automagically spawns in a car all the time",
+        "1 = Keep car on respawn | 0 = Lose car after death | 2 = Everyone automagically spawns in a car all the time unless teamonly disables them",
         FCVAR_PLUGIN|FCVAR_NOTIFY,
         true, 0.0, true, 2.0
     );
@@ -138,7 +128,7 @@ public OnPluginStart()
 
     HookEvent("player_spawn", OnPlayerSpawn, EventHookMode_Post);
 
-    AutoExecConfig(true, "plugin.bumpercar");
+    AutoExecConfig(true, "plugin.car");
 
     RegAdminCmd("sm_bumpercar", Command_BumperCar, 0, "sm_car <noparam|#userid|name> <noparam|on|off> - Toggles bumper car on all targets or self");
     RegAdminCmd("sm_car", Command_BumperCar, 0, "sm_car <noparam|#userid|name> <noparam|on|off> - Toggles bumper car on all targets or self");
@@ -279,7 +269,7 @@ public Action:DoSuicide(client, const String:command[], argc)
 {
     if (g_bCanSuicide)
     {                                  // Hale can suicide too
-        SDKHooks_TakeDamage(client, 0, 0, 40000.0, command[0] == 'e' ? DMG_BLAST : DMG_GENERIC); // e for EXPLODE
+        SDKHooks_TakeDamage(client, 0, 0, 40000.0, (command[0] == 'e' ? DMG_BLAST : DMG_GENERIC)|DMG_PREVENT_PHYSICS_FORCE); // e for EXPLODE
         return Plugin_Handled;
     }
     return Plugin_Continue;
@@ -289,7 +279,7 @@ public Action:DoSuicide2(client, const String:command[], argc)
 {
     if (GetClientTeam(client) != StringToInt(command[9]))
     {
-        SDKHooks_TakeDamage(client, 0, 0, 40000.0, DMG_GENERIC); // Yeah I borrowed this from McKay cause ForcePlayerSuicide doesn't seem to work here
+        SDKHooks_TakeDamage(client, 0, 0, 40000.0, DMG_GENERIC|DMG_PREVENT_PHYSICS_FORCE); // Yeah I borrowed this from McKay cause ForcePlayerSuicide doesn't seem to work here
     }
     return Plugin_Continue;
 }
@@ -689,7 +679,6 @@ stock PrecacheKart() //void CTFPlayer::PrecacheKart()
     PrecacheScriptSound("BumperCar.GoLoop");
     PrecacheScriptSound("BumperCar.Screech");
     PrecacheScriptSound("BumperCar.HitGhost");
-    PrecacheScriptSound("BumperCar.Bump");
     PrecacheScriptSound("BumperCar.Bump");
     PrecacheScriptSound("BumperCar.BumpIntoAir");
     PrecacheScriptSound("BumperCar.SpeedBoostStart");
