@@ -10,6 +10,10 @@
  m_flTorsoScale
  m_flHandScale 
 
+ +back = disable boost
+
+ cvar_ only change cart state on spawn
+
 */
 
 #pragma semicolon 1
@@ -17,7 +21,7 @@
 #include <tf2_stocks>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION "0x08"
+#define PLUGIN_VERSION "0x09"
 
 enum
 {
@@ -28,7 +32,6 @@ enum
     _JarateSwimming,
     _NoMove,
     _NoMoveGateBlock,
-    _NoMoveGateBlock2
 }
 
 new Handle:g_cvTeamOnly;
@@ -46,6 +49,15 @@ new g_iKeepCar;
 
 new bool:g_bKeepCar[MAXPLAYERS + 1] = {false,...};  // Whether to keep car after respawn
 new bool:g_bWasDriving[MAXPLAYERS + 1] = {false,...}; // Whether to keep car after certain tf conditions are applied
+
+new Handle:g_cvCanSuicide;
+new bool:g_bCanSuicide;
+
+new Handle:g_cvToggleOnSpawn;
+new bool:g_bToggleOnSpawn;
+
+new Handle:g_cvHardStop;
+new bool:g_bHardStop;
 
 public Plugin:myinfo = {
     name = "Bumpa cars",
@@ -91,12 +103,40 @@ public OnPluginStart()
         true, 0.0, true, 2.0
     );
 
+    g_cvCanSuicide = CreateConVar(
+        "cv_bumpercar_suicide", "1",
+        "1 = people in car can suicide | 0 = cannot suicide",
+        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        true, 0.0, true, 1.0
+    );
+
+    g_cvToggleOnSpawn = CreateConVar(
+        "cv_bumpercar_spawn", "1",
+        "1 = have to respawn to enter/exit car | 0 = can enter/exit car at any time - don't need to respawn",
+        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        true, 0.0, true, 1.0
+    );
+
+    g_cvHardStop = CreateConVar(
+        "cv_bumpercar_backstop", "1",
+        "1 = +back cancels speed boost | 0 = +back does not cancel speed boost",
+        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        true, 0.0, true, 1.0
+    );
+
     HookConVarChange(g_cvTeamOnly, CvarChange);
     HookConVarChange(g_cvBoostTime, CvarChange);
     HookConVarChange(g_cvHeadScale, CvarChange);
     HookConVarChange(g_cvKeepCar, CvarChange);
+    HookConVarChange(g_cvCanSuicide, CvarChange);
+    HookConVarChange(g_cvToggleOnSpawn, CvarChange);
+    HookConVarChange(g_cvHardStop, CvarChange);
 
-    HookEvent("player_spawn", OnPlayerSpawn, EventHookMode_PostNoCopy);
+    AddCommandListener(DoSuicide, "explode");
+    AddCommandListener(DoSuicide, "kill");
+    AddCommandListener(DoSuicide2, "jointeam");
+
+    HookEvent("player_spawn", OnPlayerSpawn, EventHookMode_Post);
 
     AutoExecConfig(true, "plugin.bumpercar");
 
@@ -128,6 +168,9 @@ public OnConfigsExecuted()
 
     g_flHeadScale = GetConVarFloat(g_cvHeadScale);
     g_iKeepCar = GetConVarInt(g_cvKeepCar);
+    g_bCanSuicide = GetConVarBool(g_cvCanSuicide);
+    g_bToggleOnSpawn = GetConVarBool(g_cvToggleOnSpawn);
+    g_bHardStop = GetConVarBool(g_cvHardStop);
 }
 
 public CvarChange(Handle:hCvar, const String:oldValue[], const String:newValue[])
@@ -135,6 +178,19 @@ public CvarChange(Handle:hCvar, const String:oldValue[], const String:newValue[]
     if (hCvar == g_cvTeamOnly)
     {
         g_iCatTeam = GetConVarInt(g_cvTeamOnly);
+
+        if (g_iCatTeam > 1)
+        {
+            for(new i = 1; i <= MaxClients; i++)
+            {
+                if (IsClientInGame(i) && IsPlayerAlive(i) && TF2_IsPlayerInCondition(i, TFCond:_BumperCar) && GetClientTeam(i) != g_iCatTeam)
+                {
+                    TF2_RemoveCondition(i, TFCond:_BumperCar);
+                    g_bKeepCar[i] = false;
+                    g_bWasDriving[i] = false;
+                }
+            }
+        }
     }
     else if (hCvar == g_cvBoostTime)
     {
@@ -152,11 +208,32 @@ public CvarChange(Handle:hCvar, const String:oldValue[], const String:newValue[]
     {
         g_iKeepCar = GetConVarInt(g_cvKeepCar);
     }
+    else if (hCvar == g_cvCanSuicide)
+    {
+        g_bCanSuicide = GetConVarBool(g_cvCanSuicide);
+    }
+    else if (hCvar == g_cvToggleOnSpawn)
+    {
+        g_bToggleOnSpawn = GetConVarBool(g_cvToggleOnSpawn);
+    }
+    else if (hCvar == g_cvHardStop)
+    {
+        g_bHardStop = GetConVarBool(g_cvHardStop);
+    }
 }
 
 public OnClientPostAdminCheck(client)
 {
     SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
+
+    g_bKeepCar[client] = false;
+    g_bWasDriving[client] = false;
+}
+
+public OnClientDisconnect(client)
+{
+    g_bKeepCar[client] = false;
+    g_bWasDriving[client] = false;
 }
 
 public Action:OnTakeDamage(iVictim, &iAtker, &iInflictor, &Float:flDamage, &iDmgType, &iWeapon, Float:vDmgForce[3], Float:vDmgPos[3], iDmgCustom)
@@ -172,11 +249,11 @@ public Action:OnTakeDamage(iVictim, &iAtker, &iInflictor, &Float:flDamage, &iDmg
                 ForcePlayerSuicide(iVictim);
             }
         }
-        else if (IsValidClient(iAtker) && !TF2_IsPlayerInCondition(iVictim, TFCond:_BumperCar) && TF2_IsPlayerInCondition(iAtker, TFCond:_BumperCar))
+        /*else if (IsValidClient(iAtker) && !TF2_IsPlayerInCondition(iVictim, TFCond:_BumperCar) && TF2_IsPlayerInCondition(iAtker, TFCond:_BumperCar))
         {
             flDamage *= 2.0;
             return Plugin_Changed;
-        }
+        }*/
     }
 
     return Plugin_Continue;
@@ -191,11 +268,30 @@ public Action:OnPlayerSpawn(Handle:event, const String:name[], bool:dontBroadcas
 {
     new client = GetClientOfUserId(GetEventInt(event, "userid"));
     
-    if (g_iKeepCar != 0 && (g_bKeepCar[client] || g_iKeepCar == 2))
+    if (g_iKeepCar != 0 && ((g_iKeepCar == 1 && g_bKeepCar[client]) || g_iKeepCar == 2))
     {
         TryEnterCar(client);
         g_bWasDriving[client] = true;
     }
+}
+
+public Action:DoSuicide(client, const String:command[], argc)
+{
+    if (g_bCanSuicide)
+    {                                  // Hale can suicide too
+        SDKHooks_TakeDamage(client, 0, 0, 40000.0, command[0] == 'e' ? DMG_BLAST : DMG_GENERIC); // e for EXPLODE
+        return Plugin_Handled;
+    }
+    return Plugin_Continue;
+}
+
+public Action:DoSuicide2(client, const String:command[], argc)
+{
+    if (GetClientTeam(client) != StringToInt(command[9]))
+    {
+        SDKHooks_TakeDamage(client, 0, 0, 40000.0, DMG_GENERIC); // Yeah I borrowed this from McKay cause ForcePlayerSuicide doesn't seem to work here
+    }
+    return Plugin_Continue;
 }
 
 public bool:CarTargetFilter(const String:pattern[], Handle:clients)
@@ -269,15 +365,28 @@ public TF2_OnConditionAdded(client, TFCond:cond)
     }
 }
 
-/*public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:angles[3], &weapon)
+public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:angles[3], &weapon)
 {
-    if (bool:(buttons & IN_ATTACK2) && g_flBoostTime < 0 && (GetGameTime() - g_flActivateFrame[client])>0.5)
+    /*if (bool:(buttons & IN_ATTACK2) && g_flBoostTime < 0 && (GetGameTime() - g_flActivateFrame[client])>0.5)
     {
         TF2_RemoveCondition(client, TFCond:_KartSpeedBoost);
         SetEntPropFloat(client, Prop_Send, "m_flKartNextAvailableBoost", GetGameTime());
         g_flActivateFrame[client] = GetGameTime();
+    }*/
+
+    if (bool:(buttons & IN_BACK))
+    {
+        if (g_bHardStop && TF2_IsPlayerInCondition(client, TFCond:_KartSpeedBoost)) // Without the check, this is spammy
+        {
+            TF2_RemoveCondition(client, TFCond:_KartSpeedBoost);
+
+            if (g_flBoostTime < 0)
+            {
+                SetEntPropFloat(client, Prop_Send, "m_flKartNextAvailableBoost", GetGameTime());
+            }
+        }
     }
-}*/
+}
 
 /*public Post_CarEnable(any:data)
 {
@@ -424,7 +533,7 @@ public Action:Command_BumperCar(client, argc)
             {
                 if (bOn)
                 {
-                    if (IsPlayerAlive(target_list[i]))
+                    if (IsPlayerAlive(target_list[i]) && !g_bToggleOnSpawn)
                     {
                         TryEnterCar(target_list[i]);
                     }
@@ -433,7 +542,10 @@ public Action:Command_BumperCar(client, argc)
                 }
                 else
                 {
-                    TF2_RemoveCondition(target_list[i], TFCond:_BumperCar);
+                    if (!g_bToggleOnSpawn)
+                    {
+                        TF2_RemoveCondition(target_list[i], TFCond:_BumperCar);
+                    }
                     g_bKeepCar[target_list[i]] = false;
                     g_bWasDriving[target_list[i]] = false;
                 }
@@ -455,9 +567,7 @@ public Action:Command_BumperCar(client, argc)
         {
             ReplyToTargetError(client, target_count);
         }
-
     }
-
     return Plugin_Handled;
 }
 
@@ -528,23 +638,38 @@ stock bool:SelfEnterCar(client) // , iOn=-1
 
     if (TF2_IsPlayerInCondition(client, TFCond:_BumperCar))
     {
-        TF2_RemoveCondition(client, TFCond:_BumperCar);
-        ReplyToCommand(client, "[SM] You have exited your bumper car.");
-    }
-    else
-    {
-        if (TryEnterCar(client))
+        if (g_bToggleOnSpawn)
         {
-            ReplyToCommand(client, "[SM] You are now riding a bumper car!");
-            return true;
+            ReplyToCommand(client, "[SM] You will exit your bumper car after you respawn.");
         }
         else
         {
-            ReplyToCommand(client, "[SM] You can't ride a bumper car in your current state.");
+            TF2_RemoveCondition(client, TFCond:_BumperCar);
+            ReplyToCommand(client, "[SM] You have exited your bumper car.");
         }
+        return false;
+    }
+    else
+    {
+        if (g_bToggleOnSpawn)
+        {
+            ReplyToCommand(client, "[SM] You will enter your bumper car after you respawn.");
+        }
+        else
+        {
+            if (TryEnterCar(client))
+            {
+                ReplyToCommand(client, "[SM] You are now riding a bumper car!");
+            }
+            else
+            {
+                ReplyToCommand(client, "[SM] You can't ride a bumper car in your current state.");
+            }
+        }
+
         return true;
     }
-    return false;
+    // Can't really reach this spot
 }
 
 stock bool:IsValidClient(iClient)
