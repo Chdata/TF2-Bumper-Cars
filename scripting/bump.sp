@@ -17,7 +17,7 @@
 #include <tf2_stocks>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION "0x06"
+#define PLUGIN_VERSION "0x07"
 
 enum
 {
@@ -88,7 +88,7 @@ public OnPluginStart()
         "cv_bumpercar_respawn", "1",
         "1 = Keep car on respawn | 0 = Lose car after death | 2 = Everyone automagically spawns in a car all the time",
         FCVAR_PLUGIN|FCVAR_NOTIFY,
-        true, 0.0, true, 1.0
+        true, 0.0, true, 2.0
     );
 
     HookConVarChange(g_cvTeamOnly, CvarChange);
@@ -324,9 +324,10 @@ public TF2_OnConditionRemoved(client, TFCond:cond)
     {
         case (TFCond:_JarateSwimming), TFCond_Taunting:
         {
-            if (g_bWasDriving[client] && !TF2_IsPlayerInCondition(client, TFCond_HalloweenGhostMode))
+            if (g_bWasDriving[client])
             {
-                TF2_AddCondition(client, TFCond:_BumperCar, TFCondDuration_Infinite);
+                TryEnterCar(client);
+                //TF2_AddCondition(client, TFCond:_BumperCar, TFCondDuration_Infinite);
             }
         }
         case (TFCond:_BumperCar):
@@ -371,7 +372,7 @@ public Action:Command_BumperCar(client, argc)
     }
     else
     {
-        new fFlags = COMMAND_FILTER_CONNECTED|COMMAND_FILTER_ALIVE;
+        new fFlags = COMMAND_FILTER_CONNECTED;
 
         if (argc == 1)
         {
@@ -453,15 +454,18 @@ public Action:Command_BumperCar(client, argc)
             {
                 if (bOn)
                 {
-                    TryEnterCar(target_list[i]);
-                    g_bKeepCar[client] = true;
-                    g_bWasDriving[client] = true;
+                    if (IsPlayerAlive(target_list[i]))
+                    {
+                        TryEnterCar(target_list[i]);
+                    }
+                    g_bKeepCar[target_list[i]] = true;
+                    g_bWasDriving[target_list[i]] = true;
                 }
                 else
                 {
                     TF2_RemoveCondition(target_list[i], TFCond:_BumperCar);
-                    g_bKeepCar[client] = false;
-                    g_bWasDriving[client] = false;
+                    g_bKeepCar[target_list[i]] = false;
+                    g_bWasDriving[target_list[i]] = false;
                 }
 
                 //if (AreClientCookiesCached(target_list[i]))
@@ -491,6 +495,11 @@ stock bool:TryEnterCar(client)
 {
     if (!TF2_IsPlayerInCondition(client, TFCond:_JarateSwimming) && !TF2_IsPlayerInCondition(client, TFCond_HalloweenGhostMode) && !TF2_IsPlayerInCondition(client, TFCond_Taunting))
     {
+        if ((g_iCatTeam == 2 || g_iCatTeam == 3) && GetClientTeam(client) != g_iCatTeam)
+        {
+            return false;
+        }
+
         TF2_AddCondition(client, TFCond:_BumperCar, TFCondDuration_Infinite);
         return true;
     }
@@ -565,3 +574,33 @@ stock bool:IsValidClient(iClient)
     if (GetEntProp(iClient, Prop_Send, "m_bIsCoaching")) return false;
     return true;
 }
+
+/*
+void CTFPlayer::PrecacheKart()
+{
+  CBaseEntity::PrecacheModel("models/player/items/taunts/bumpercar/parts/bumpercar.mdl", 1);
+  CBaseEntity::PrecacheModel("models/props_halloween/bumpercar_cage.mdl", 1);
+  
+  CBaseEntity::PrecacheScriptSound("BumperCar.Spawn");
+  CBaseEntity::PrecacheScriptSound("BumperCar.SpawnFromLava");
+  CBaseEntity::PrecacheScriptSound("BumperCar.GoLoop");
+  CBaseEntity::PrecacheScriptSound("BumperCar.Screech");
+  CBaseEntity::PrecacheScriptSound("BumperCar.HitGhost");
+  CBaseEntity::PrecacheScriptSound("BumperCar.Bump");
+  CBaseEntity::PrecacheScriptSound("BumperCar.Bump");
+  CBaseEntity::PrecacheScriptSound("BumperCar.BumpIntoAir");
+  CBaseEntity::PrecacheScriptSound("BumperCar.SpeedBoostStart");
+  CBaseEntity::PrecacheScriptSound("BumperCar.SpeedBoostStop");
+  CBaseEntity::PrecacheScriptSound("BumperCar.Jump");
+  CBaseEntity::PrecacheScriptSound("BumperCar.JumpLand");
+  CBaseEntity::PrecacheScriptSound("sf14.Merasmus.DuckHunt.BonusDucks");
+  
+  PrecacheParticleSystem("kartimpacttrail");
+  PrecacheParticleSystem("kart_dust_trail_red");
+  PrecacheParticleSystem("kart_dust_trail_blue");
+  
+  return PrecacheParticleSystem("kartdamage_4");
+}
+
+
+*/
