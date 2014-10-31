@@ -17,7 +17,7 @@
 #include <tf2_stocks>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION "0x07"
+#define PLUGIN_VERSION "0x08"
 
 enum
 {
@@ -184,37 +184,7 @@ public Action:OnTakeDamage(iVictim, &iAtker, &iInflictor, &Float:flDamage, &iDmg
 
 public OnMapStart()
 {
-    PrecacheModel("models/player/items/taunts/bumpercar/parts/bumpercar.mdl");
-    PrecacheModel("models/player/items/taunts/bumpercar/parts/bumpercar_nolights.mdl");
-
-    PrecacheSound("weapons/bumper_car_speed_boost_start.wav", true);
-    PrecacheSound("weapons/bumper_car_speed_boost_stop.wav", true);
-
-    //PrecacheSound("weapons/buffed_off.wav", true);
-    //PrecacheSound("weapons/buffed_on.wav"", true);
-
-    PrecacheSound("weapons/bumper_car_hit_ball.wav", true);
-    PrecacheSound("weapons/bumper_car_hit_ghost.wav", true);
-    PrecacheSound("weapons/bumper_car_hit_hard.wav", true);
-    PrecacheSound("weapons/bumper_car_hit_into_air.wav", true);
-    PrecacheSound("weapons/bumper_car_spawn.wav", true);
-    PrecacheSound("weapons/bumper_car_spawn_from_lava.wav", true);
-
-    PrecacheSound("weapons/bumper_car_accelerate.wav", true); // These seem to already always work.
-    PrecacheSound("weapons/bumper_car_decelerate.wav", true); // Except not for people other than me? lul
-    PrecacheSound("weapons/bumper_car_decelerate_quick.wav", true);
-    PrecacheSound("weapons/bumper_car_go_loop.wav", true);
-    PrecacheSound("weapons/bumper_car_hit1.wav", true);
-    PrecacheSound("weapons/bumper_car_hit2.wav", true);
-    PrecacheSound("weapons/bumper_car_hit3.wav", true);
-    PrecacheSound("weapons/bumper_car_hit4.wav", true);
-    PrecacheSound("weapons/bumper_car_hit5.wav", true);
-    PrecacheSound("weapons/bumper_car_hit6.wav", true);
-    PrecacheSound("weapons/bumper_car_hit7.wav", true);
-    PrecacheSound("weapons/bumper_car_hit8.wav", true);
-    PrecacheSound("weapons/bumper_car_jump.wav", true);
-    PrecacheSound("weapons/bumper_car_jump_land.wav", true);
-    PrecacheSound("weapons/bumper_car_screech.wav", true);
+    PrecacheKart();
 }
 
 public Action:OnPlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast)
@@ -516,8 +486,16 @@ stock bool:SelfEnterCar(client) // , iOn=-1
 
     if (!IsPlayerAlive(client))
     {
-        ReplyToCommand(client, "[SM] You must be alive to ride bumper cars.");
-        return false;
+        if (g_iKeepCar == 1)
+        {
+            ReplyToCommand(client, "[SM] You will be in a bumper car when you spawn.");
+            return true;
+        }
+        else if (g_iKeepCar == 0)
+        {
+            ReplyToCommand(client, "[SM] You must be alive to ride bumper cars.");
+            return false;
+        }
     }
 
     /*if (iOn != -1)
@@ -542,7 +520,7 @@ stock bool:SelfEnterCar(client) // , iOn=-1
         }
         else
         {
-            // lol this is silly
+            // lol this is silly, quadratic logic
         }
 
         return;
@@ -564,6 +542,7 @@ stock bool:SelfEnterCar(client) // , iOn=-1
         {
             ReplyToCommand(client, "[SM] You can't ride a bumper car in your current state.");
         }
+        return true;
     }
     return false;
 }
@@ -575,32 +554,85 @@ stock bool:IsValidClient(iClient)
     return true;
 }
 
-/*
-void CTFPlayer::PrecacheKart()
+stock PrecacheKart() //void CTFPlayer::PrecacheKart()
 {
-  CBaseEntity::PrecacheModel("models/player/items/taunts/bumpercar/parts/bumpercar.mdl", 1);
-  CBaseEntity::PrecacheModel("models/props_halloween/bumpercar_cage.mdl", 1);
-  
-  CBaseEntity::PrecacheScriptSound("BumperCar.Spawn");
-  CBaseEntity::PrecacheScriptSound("BumperCar.SpawnFromLava");
-  CBaseEntity::PrecacheScriptSound("BumperCar.GoLoop");
-  CBaseEntity::PrecacheScriptSound("BumperCar.Screech");
-  CBaseEntity::PrecacheScriptSound("BumperCar.HitGhost");
-  CBaseEntity::PrecacheScriptSound("BumperCar.Bump");
-  CBaseEntity::PrecacheScriptSound("BumperCar.Bump");
-  CBaseEntity::PrecacheScriptSound("BumperCar.BumpIntoAir");
-  CBaseEntity::PrecacheScriptSound("BumperCar.SpeedBoostStart");
-  CBaseEntity::PrecacheScriptSound("BumperCar.SpeedBoostStop");
-  CBaseEntity::PrecacheScriptSound("BumperCar.Jump");
-  CBaseEntity::PrecacheScriptSound("BumperCar.JumpLand");
-  CBaseEntity::PrecacheScriptSound("sf14.Merasmus.DuckHunt.BonusDucks");
-  
-  PrecacheParticleSystem("kartimpacttrail");
-  PrecacheParticleSystem("kart_dust_trail_red");
-  PrecacheParticleSystem("kart_dust_trail_blue");
-  
-  return PrecacheParticleSystem("kartdamage_4");
+    PrecacheModel("models/player/items/taunts/bumpercar/parts/bumpercar.mdl", true);
+    PrecacheModel("models/player/items/taunts/bumpercar/parts/bumpercar_nolights.mdl", true);
+
+    PrecacheScriptSound("BumperCar.Spawn");
+    PrecacheScriptSound("BumperCar.SpawnFromLava");
+    PrecacheScriptSound("BumperCar.GoLoop");
+    PrecacheScriptSound("BumperCar.Screech");
+    PrecacheScriptSound("BumperCar.HitGhost");
+    PrecacheScriptSound("BumperCar.Bump");
+    PrecacheScriptSound("BumperCar.Bump");
+    PrecacheScriptSound("BumperCar.BumpIntoAir");
+    PrecacheScriptSound("BumperCar.SpeedBoostStart");
+    PrecacheScriptSound("BumperCar.SpeedBoostStop");
+    PrecacheScriptSound("BumperCar.Jump");
+    PrecacheScriptSound("BumperCar.JumpLand");
+    PrecacheScriptSound("sf14.Merasmus.DuckHunt.BonusDucks"); //BonusDi
+
+    PrecacheParticleSystem("kartimpacttrail");
+    PrecacheParticleSystem("kart_dust_trail_red");
+    PrecacheParticleSystem("kart_dust_trail_blue");
+
+    return PrecacheParticleSystem("kartdamage_4");
 }
 
+/* SMLIB
+ * Precaches the given particle system.
+ * It's best to call this OnMapStart().
+ * Code based on Rochellecrab's, thanks.
+ * 
+ * @param particleSystem    Name of the particle system to precache.
+ * @return                  Returns the particle system index, INVALID_STRING_INDEX on error.
+ */
+stock PrecacheParticleSystem(const String:particleSystem[])
+{
+    static particleEffectNames = INVALID_STRING_TABLE;
 
-*/
+    if (particleEffectNames == INVALID_STRING_TABLE) {
+        if ((particleEffectNames = FindStringTable("ParticleEffectNames")) == INVALID_STRING_TABLE) {
+            return INVALID_STRING_INDEX;
+        }
+    }
+
+    new index = FindStringIndex2(particleEffectNames, particleSystem);
+    if (index == INVALID_STRING_INDEX) {
+        new numStrings = GetStringTableNumStrings(particleEffectNames);
+        if (numStrings >= GetStringTableMaxStrings(particleEffectNames)) {
+            return INVALID_STRING_INDEX;
+        }
+        
+        AddToStringTable(particleEffectNames, particleSystem);
+        index = numStrings;
+    }
+    
+    return index;
+}
+
+/* SMLIB
+ * Rewrite of FindStringIndex, because in my tests
+ * FindStringIndex failed to work correctly.
+ * Searches for the index of a given string in a string table. 
+ * 
+ * @param tableidx      A string table index.
+ * @param str           String to find.
+ * @return              String index if found, INVALID_STRING_INDEX otherwise.
+ */
+stock FindStringIndex2(tableidx, const String:str[])
+{
+    decl String:buf[1024];
+
+    new numStrings = GetStringTableNumStrings(tableidx);
+    for (new i=0; i < numStrings; i++) {
+        ReadStringTable(tableidx, i, buf, sizeof(buf));
+        
+        if (StrEqual(buf, str)) {
+            return i;
+        }
+    }
+    
+    return INVALID_STRING_INDEX;
+}
