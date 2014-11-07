@@ -3,6 +3,7 @@
  By: Chdata
 
  Thanks to Dr. McKay for the original Kartify plugin.
+ Thanks to FlaminSarge for adding some fixes and features.
 
 */
 
@@ -11,7 +12,7 @@
 #include <tf2_stocks>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION "0x0B"
+#define PLUGIN_VERSION "0x0C"
 
 enum // Delete after tf2.inc updates
 {
@@ -48,6 +49,10 @@ new bool:g_bCarNoTakeDamage;
 new Handle:g_cvCarPctDamage;
 new g_iCarPctDamage;
 
+new Handle:g_cvCarInitPctDmg;
+
+//new Handle:g_cvCarPctAsHealth;
+
 new Float:g_flBoostTime;
 
 new Float:g_flFreezeTimeEnd;
@@ -56,9 +61,9 @@ new bool:g_bKeepCar[MAXPLAYERS + 1] = {false,...};    // Whether to keep car aft
 new bool:g_bWasDriving[MAXPLAYERS + 1] = {false,...}; // Whether to keep car after certain tf conditions are applied
 
 public Plugin:myinfo = {
-    name = "Bumpa cars",
+    name = "Chdata's Car data",
     author = "Chdata",
-    description = "Put people into bumper cars",
+    description = "Put people into bumper cars & fix various issues",
     version = PLUGIN_VERSION,
     url = "http://steamcommunity.com/groups/tf2data"
 };
@@ -100,7 +105,7 @@ public OnPluginStart()
     );
 
     g_cvToggleOnSpawn = CreateConVar(
-        "cv_bumpercar_spawn", "0",
+        "cv_bumpercar_spawntoggle", "0",
         "1 = have to respawn to enter/exit car | 0 = can enter/exit car at any time - don't need to respawn",
         FCVAR_PLUGIN|FCVAR_NOTIFY,
         true, 0.0, true, 1.0
@@ -114,7 +119,7 @@ public OnPluginStart()
     );
 
     g_cvCarNoTakeDamage = CreateConVar(
-        "cv_bumpercar_notakedamage", "1",
+        "cv_bumpercar_blockplayerdmg", "1",
         "1 = enable damage block for non-drivers attacking drivers | 0 = no damage block, non-drivers can damage and kill drivers",
         FCVAR_PLUGIN|FCVAR_NOTIFY,
         true, 0.0, true, 1.0
@@ -125,6 +130,13 @@ public OnPluginStart()
         "-1 = (anything negative) car damage acts like it normally does | 0+ (anything non-negative) car damage percentage stays at this integer all the time",
         FCVAR_PLUGIN|FCVAR_NOTIFY,
         true, -1.0, true, 999999.0
+    );
+
+    g_cvCarInitPctDmg = CreateConVar(
+        "cv_bumpercar_initpct", "0",
+        "An amount of damage cars start with on spawn. Only applies if cv_bumpercar_percent is -1.",
+        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        true, 0.0, true, 999999.0
     );
 
     HookConVarChange(g_cvTeamOnly, CvarChange);
@@ -145,8 +157,8 @@ public OnPluginStart()
 
     AutoExecConfig(true, "ch.bumpercar");
 
-    RegAdminCmd("sm_bumpercar", Command_BumperCar, 0, "sm_car <noparam|#userid|name> <noparam|on|off> - Toggles bumper car on all targets or self");
-    RegAdminCmd("sm_car", Command_BumperCar, 0, "sm_car <noparam|#userid|name> <noparam|on|off> - Toggles bumper car on all targets or self");
+    RegAdminCmd("sm_bumpercar", cmdBumperCar, 0, "sm_car <noparam|#userid|name> <noparam|on|off> - Toggles bumper car on all targets or self");
+    RegAdminCmd("sm_car", cmdBumperCar, 0, "sm_car <noparam|#userid|name> <noparam|on|off> - Toggles bumper car on all targets or self");
 
     AddMultiTargetFilter("@cars", CarTargetFilter, "all drivers", false);
     AddMultiTargetFilter("@!cars", CarTargetFilter, "all non-drivers", false);
@@ -229,13 +241,13 @@ public CvarChange(Handle:hCvar, const String:oldValue[], const String:newValue[]
     }
 }
 
-public OnClientPutInServer(client)
+public OnClientPutInServer(iClient)
 {
-    SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
-    SDKHook(client, SDKHook_PostThinkPost, OnPostThinkPost);
+    SDKHook(iClient, SDKHook_OnTakeDamage, OnTakeDamage);
+    SDKHook(iClient, SDKHook_PostThinkPost, OnPostThinkPost);
 
-    g_bKeepCar[client] = false;
-    g_bWasDriving[client] = false;
+    g_bKeepCar[iClient] = false;
+    g_bWasDriving[iClient] = false;
 }
 
 public Action:OnTakeDamage(iVictim, &iAtker, &iInflictor, &Float:flDamage, &iDmgType, &iWeapon, Float:vDmgForce[3], Float:vDmgPos[3], iDmgCustom)
@@ -252,7 +264,7 @@ public Action:OnTakeDamage(iVictim, &iAtker, &iInflictor, &Float:flDamage, &iDmg
         GetEdictClassname(iAtker, s, sizeof(s));
         if (StrEqual(s, "trigger_hurt", false))
         {
-            ForcePlayerSuicide(iVictim);
+            SDKHooks_TakeDamage(iVictim, iAtker, iAtker, 40000.0, DMG_GENERIC|DMG_PREVENT_PHYSICS_FORCE);
         }
         /*else if (IsValidClient(iAtker) && !TF2_IsPlayerInCondition(iVictim, TFCond:_HalloweenKart) && TF2_IsPlayerInCondition(iAtker, TFCond:_HalloweenKart))
         {
@@ -269,13 +281,13 @@ public OnMapStart()
     g_flFreezeTimeEnd = 0.0;
 }
 
-public Action:OnPlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast)
+public OnPlayerSpawn(Handle:hEvent, const String:sName[], bool:bDontBroadcast)
 {
-    new client = GetClientOfUserId(GetEventInt(event, "userid"));
-    TryClientSpawnCar(client);
+    new iClient = GetClientOfUserId(GetEventInt(hEvent, "userid"));
+    TryClientSpawnCar(iClient);
 }
 
-public Action:OnRoundStart(Handle:event, const String:name[], bool:dontBroadcast)
+public OnRoundStart(Handle:hNull, const String:sName[], bool:bDontBroadcast)
 {
     new bool:bArena = GetConVarBool(FindConVar("tf_gamemode_arena"));
     new bool:bRoundWaitTime = GetConVarBool(FindConVar("mp_enableroundwaittime"));
@@ -299,36 +311,79 @@ stock TryClientSpawnCar(iClient)
     {
         if (TryEnterCar(iClient))
         {
-            decl Float:vPos[3];
-            GetClientAbsOrigin(iClient, vPos);  // I do this because on some maps, spawning in a car spams repeated noises until you jump.
-            vPos[2] += 1.0;
-            TeleportEntity(iClient, vPos, NULL_VECTOR, NULL_VECTOR);
-        }
+            new Float:flCurryTime = GetGameTime();
+            if (flCurryTime < g_flFreezeTimeEnd)
+            {
+                TF2_AddCondition(iClient, TFCond:_StopMovement, g_flFreezeTimeEnd - flCurryTime);
+            }
 
-        new Float:flCurryTime = GetGameTime();
-        if (flCurryTime < g_flFreezeTimeEnd)
-        {
-            TF2_AddCondition(iClient, TFCond:_HalloweenKartCage, g_flFreezeTimeEnd - flCurryTime);
+            RequestFrame(OnPostPostPlayerSpawn, GetClientUserId(iClient)); // I think this may not be necessary actually...
+            //FixSpawnOrientation(iClient);
         }
         g_bWasDriving[iClient] = true;
     }
 }
 
-public Action:DoSuicide(client, const String:command[], argc)
+// Wait 1 frame is so the player's angles can be oriented with info_player_teamspawn
+public OnPostPostPlayerSpawn(any:iData)
+{
+    new iClient = GetClientOfUserId(iData);
+    if (IsValidClient(iClient))
+    {
+        FixSpawnOrientation(iClient);
+    }
+}
+
+stock FixSpawnOrientation(iClient)
+{
+    new iEnt = -1;
+    decl Float:vPos1[3], Float:vPos2[3], Float:vAng[3];
+    new iTeam = GetClientTeam(iClient);
+    GetEntPropVector(iClient, Prop_Send, "m_vecOrigin", vPos2); //GetClientAbsOrigin(iClient, vPos);
+    while ((iEnt = FindEntityByClassname2(iEnt, "info_player_teamspawn")) != -1)
+    {
+        if (iTeam == GetEntProp(iEnt, Prop_Send, "m_iTeamNum"))
+        {
+            GetEntPropVector(iEnt, Prop_Send, "m_vecOrigin", vPos1);
+
+            if (GetVectorDistance(vPos1, vPos2) <= 25.0) // Generally safe to say this was your spawn point
+            {
+                GetEntPropVector(iEnt, Prop_Send, "m_angRotation", vAng);
+                //GetEntPropVector(iEnt, Prop_Data, "m_angAbsRotation", vAng);
+                break;
+            }
+        }
+    }
+
+    // Should be impossible not to find at least one spawn
+    if (iEnt == -1)
+    {
+        return;
+    }
+    
+    vPos1[2] += 10.0;       // I do this because on some maps, spawning in a car spams repeated noises until you jump.
+    vAng[0] += 10.0;        // It seems like not setting this sometimes makes your view go under the ground
+    TeleportEntity(iClient, vPos1, vAng, NULL_VECTOR);
+    ForcePlayerViewAngles(iClient, vAng);
+
+    //LogMessage("oriented %N %i on spawn %i dist %0.3f %0.1f %0.1f %0.1f", iClient, iClient, iEnt, GetVectorDistance(vPos1, vPos2), vAng[0], vAng[1], vAng[2]);
+}
+
+public Action:DoSuicide(iClient, const String:sCommand[], iArgc)
 {
     if (GetConVarBool(g_cvCanSuicide))
     {                                  // Hale can suicide too
-        SDKHooks_TakeDamage(client, 0, 0, 40000.0, (command[0] == 'e' ? DMG_BLAST : DMG_GENERIC)|DMG_PREVENT_PHYSICS_FORCE); // e for EXPLODE
+        SDKHooks_TakeDamage(iClient, 0, 0, 40000.0, (sCommand[0] == 'e' ? DMG_BLAST : DMG_GENERIC)|DMG_PREVENT_PHYSICS_FORCE); // e for EXPLODE
         return Plugin_Handled;
     }
     return Plugin_Continue;
 }
 
-public Action:DoSuicide2(client, const String:command[], argc)
+public Action:DoSuicide2(iClient, const String:sCommand[], iArgc)
 {
-    if (GetClientTeam(client) != StringToInt(command[9]))
+    if (GetClientTeam(iClient) != StringToInt(sCommand[9]))
     {
-        SDKHooks_TakeDamage(client, 0, 0, 40000.0, DMG_GENERIC|DMG_PREVENT_PHYSICS_FORCE); // Yeah I borrowed this from McKay cause ForcePlayerSuicide doesn't seem to work here
+        SDKHooks_TakeDamage(iClient, 0, 0, 40000.0, DMG_GENERIC|DMG_PREVENT_PHYSICS_FORCE); // Yeah I borrowed this from McKay cause ForcePlayerSuicide doesn't seem to work here
     }
     return Plugin_Continue;
 }
@@ -357,80 +412,126 @@ public bool:CarTargetFilter(const String:pattern[], Handle:clients)
     return true;
 }
 
-public TF2_OnConditionAdded(client, TFCond:cond)
+/*public OnEntityCreated(iEnt, const String:sClassname[])
 {
-    switch (cond)
+    if (StrEqual(sClassname, "func_areaportal"))
+    {
+        SDKHook(iEnt, SDKHook_StartTouch, OnLeaveAreaPortal);
+        SDKHook(iEnt, SDKHook_Touch, OnLeaveAreaPortal);
+        SDKHook(iEnt, SDKHook_EndTouch, OnLeaveAreaPortal);
+
+        SDKHook(iEnt, SDKHook_StartTouchPost, OnLeaveAreaPortalNoReturn);
+        SDKHook(iEnt, SDKHook_TouchPost, OnLeaveAreaPortalNoReturn);
+        SDKHook(iEnt, SDKHook_EndTouchPost, OnLeaveAreaPortalNoReturn);
+    }
+}
+
+public Action:OnLeaveAreaPortal(iEnt, iClient)
+{
+    if (IsValidClient(iClient) && TF2_IsPlayerInCondition(iClient, TFCond:_HalloweenKart))
+    {
+        TF2_AddCondition(iClient, TFCond:_HalloweenKart);
+#if defined DEBUG
+        CPrintToChdata("%N %i left area port in car", iClient, iClient);
+#endif
+    }
+
+    return Plugin_Continue;
+}
+
+public OnLeaveAreaPortalNoReturn(iEnt, iClient)
+{
+    if (IsValidClient(iClient) && TF2_IsPlayerInCondition(iClient, TFCond:_HalloweenKart))
+    {
+        TF2_AddCondition(iClient, TFCond:_HalloweenKart);
+#if defined DEBUG
+        CPrintToChdata("%N %i left area port in car", iClient, iClient);
+#endif
+    }
+}*/
+
+public TF2_OnConditionAdded(iClient, TFCond:iCond)
+{
+    switch (iCond)
     {
         case (TFCond:_SwimmingCurse), TFCond_Taunting, TFCond_HalloweenGhostMode, TFCond_HalloweenThriller:
         {
-            if (TF2_IsPlayerInCondition(client, TFCond:_HalloweenKart))
+            if (TF2_IsPlayerInCondition(iClient, TFCond:_HalloweenKart))
             {
-                g_bWasDriving[client] = true;
-                TF2_RemoveCondition(client, TFCond:_HalloweenKart);
+                g_bWasDriving[iClient] = true;
+                TF2_RemoveCondition(iClient, TFCond:_HalloweenKart);
             }
             else
             {
-                g_bWasDriving[client] = false;
+                g_bWasDriving[iClient] = false;
             }
         }
-        /*case (TFCond:_HalloweenKart):
+        case (TFCond:_HalloweenKart):
         {
-            //RequestFrame(Post_CarEnable, GetClientUserId(client));
-        }*/
+            if (g_iCarPctDamage == -1) // Probably don't really need to check this.
+            {
+                SetEntProp(iClient, Prop_Send, "m_iKartHealth", GetConVarInt(g_cvCarInitPctDmg));
+            }
+            //RequestFrame(PostCarEnable, GetClientUserId(iClient));
+        }
         case (TFCond:_HalloweenKartDash):
         {
             if (g_flBoostTime == -1.0) // Disable constant re-dashing
             {
-                SetEntPropFloat(client, Prop_Send, "m_flKartNextAvailableBoost", GetGameTime()+999999.0);
+                SetEntPropFloat(iClient, Prop_Send, "m_flKartNextAvailableBoost", GetGameTime()+999999.0);
             }
         }
     }
 }
 
-public TF2_OnConditionRemoved(client, TFCond:cond)
+public TF2_OnConditionRemoved(iClient, TFCond:iCond)
 {
-    switch (cond)
+    switch (iCond)
     {
         case (TFCond:_SwimmingCurse), TFCond_Taunting, TFCond_HalloweenGhostMode, TFCond_HalloweenThriller:
         {
-            if (g_bWasDriving[client])
+            if (g_bWasDriving[iClient])
             {
-                TryEnterCar(client);
-                //TF2_AddCondition(client, TFCond:_HalloweenKart, TFCondDuration_Infinite);
+                TryEnterCar(iClient);
             }
         }
         case (TFCond:_HalloweenKartDash):
         {
             if (g_flBoostTime == -1.0)
             {
-                SetEntPropFloat(client, Prop_Send, "m_flKartNextAvailableBoost", GetGameTime()+2.5);
+                SetEntPropFloat(iClient, Prop_Send, "m_flKartNextAvailableBoost", GetGameTime()+1.5);
             }
+        }
+        case (TFCond:_HalloweenKart):
+        {
+            RemoveCond(iClient, TFCond:_HalloweenKartDash);
+            RemoveCond(iClient, TFCond:_HalloweenKartCage);
         }
     }
 }
 
-public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:angles[3], &weapon)
+public Action:OnPlayerRunCmd(iClient, &iButtons, &iImpulse, Float:vVel[3], Float:vAng[3], &hWeapon)
 {
-    if (buttons & IN_BACK)
+    if (iButtons & IN_BACK)
     {
-        if (g_bHardStop && TF2_IsPlayerInCondition(client, TFCond:_HalloweenKartDash)) // Without the check, this is spammy
+        if (g_bHardStop && TF2_IsPlayerInCondition(iClient, TFCond:_HalloweenKartDash)) // Without the check, this is spammy
         {
-            TF2_RemoveCondition(client, TFCond:_HalloweenKartDash);
+            TF2_RemoveCondition(iClient, TFCond:_HalloweenKartDash);
 
             if (g_flBoostTime == -1.0)
             {
-                SetEntPropFloat(client, Prop_Send, "m_flKartNextAvailableBoost", GetGameTime()+2.5);
+                SetEntPropFloat(iClient, Prop_Send, "m_flKartNextAvailableBoost", GetGameTime()+1.5);
             }
         }
     }
 }
 
-/*public Post_CarEnable(any:data)
+/*public PostCarEnable(any:iData)
 {
-    new client = GetClientOfUserId(data);
-    if (0 < client && client <= MaxClients && IsClientInGame(client))
+    new iClient = GetClientOfUserId(iData);
+    if (IsValidClient(iClient))
     {
-        SetEntPropFloat(client, Prop_Send, "m_flHeadScale", g_flHeadScale);
+        
     }
 }*/
 
@@ -450,7 +551,7 @@ public OnPostThinkPost(iClient)
     }
 }
 
-public Action:Command_BumperCar(client, argc)
+public Action:cmdBumperCar(client, argc)
 {
     if (argc == 0)
     {
@@ -595,43 +696,25 @@ public Action:Command_BumperCar(client, argc)
     return Plugin_Handled;
 }
 
-stock bool:TryEnterCar(client)
+stock bool:SelfEnterCar(iClient) // , iOn=-1
 {
-    if (IsValidClient(client) && IsPlayerAlive(client) && !TF2_IsPlayerInCondition(client, TFCond:_SwimmingCurse) && !TF2_IsPlayerInCondition(client, TFCond_HalloweenGhostMode) && !TF2_IsPlayerInCondition(client, TFCond_Taunting) && !TF2_IsPlayerInCondition(client, TFCond_HalloweenThriller))
+    if ((g_iCatTeam == 2 || g_iCatTeam == 3) && GetClientTeam(iClient) != g_iCatTeam)
     {
-        if ((g_iCatTeam == 2 || g_iCatTeam == 3) && GetClientTeam(client) != g_iCatTeam)
-        {
-            return false;
-        }
-        decl Float:ang[3];
-        GetClientEyeAngles(client, ang);
-        TF2_AddCondition(client, TFCond:_HalloweenKart);
-        ForcePlayerViewAngles(client, ang);
-        //TF2_AddCondition(client, TFCond_HalloweenInHell);
-        return true;
-    }
-    return false;
-}
-
-stock bool:SelfEnterCar(client) // , iOn=-1
-{
-    if ((g_iCatTeam == 2 || g_iCatTeam == 3) && GetClientTeam(client) != g_iCatTeam)
-    {
-        ReplyToCommand(client, "[SM] Only %s team can toggle riding bumper cars.", g_iCatTeam == 2 ? "red" : "blu");
+        ReplyToCommand(iClient, "[SM] Only %s team can toggle riding bumper cars.", g_iCatTeam == 2 ? "red" : "blu");
         return false;
     }
 
-    if (!IsPlayerAlive(client))
+    if (!IsPlayerAlive(iClient))
     {
         new iKeepCar = GetConVarInt(g_cvKeepCar);
         if (iKeepCar == 1)
         {
-            ReplyToCommand(client, "[SM] You will be in a bumper car when you spawn.");
+            ReplyToCommand(iClient, "[SM] You will be in a bumper car when you spawn.");
             return true;
         }
         else if (iKeepCar == 0)
         {
-            ReplyToCommand(client, "[SM] You must be alive to ride bumper cars.");
+            ReplyToCommand(iClient, "[SM] You must be alive to ride bumper cars.");
             return false;
         }
     }
@@ -640,19 +723,19 @@ stock bool:SelfEnterCar(client) // , iOn=-1
     {
         if (bool:iOn)
         {
-            if (TF2_IsPlayerInCondition(client, TFCond:_HalloweenKart))
+            if (TF2_IsPlayerInCondition(iClient, TFCond:_HalloweenKart))
             {
-                ReplyToCommand(client, "[SM] You are now still riding a bumper car!");
+                ReplyToCommand(iClient, "[SM] You are now still riding a bumper car!");
             }
             else
             {
-                if (TryEnterCar(client))
+                if (TryEnterCar(iClient))
                 {
-                    ReplyToCommand(client, "[SM] You are now riding a bumper car!");
+                    ReplyToCommand(iClient, "[SM] You are now riding a bumper car!");
                 }
                 else
                 {
-                    ReplyToCommand(client, "[SM] You can't ride a bumper car in your current state.");
+                    ReplyToCommand(iClient, "[SM] You can't ride a bumper car in your current state.");
                 }
             }
         }
@@ -663,42 +746,65 @@ stock bool:SelfEnterCar(client) // , iOn=-1
 
         return;
     }*/
-    new bool:bIsInKart = TF2_IsPlayerInCondition(client, TFCond:_HalloweenKart);
+    new bool:bIsInKart = TF2_IsPlayerInCondition(iClient, TFCond:_HalloweenKart);
     if (GetConVarBool(g_cvToggleOnSpawn))
     {
-        ReplyToCommand(client, "[SM] You will %s your bumper car after you respawn.", bIsInKart ? "exit" : "enter");
+        ReplyToCommand(iClient, "[SM] You will %s your bumper car after you respawn.", bIsInKart ? "exit" : "enter");
         return !bIsInKart;
     }
     if (bIsInKart)
     {
-        TF2_RemoveCondition(client, TFCond:_HalloweenKart);
-        ReplyToCommand(client, "[SM] You have exited your bumper car.");
+        TF2_RemoveCondition(iClient, TFCond:_HalloweenKart);
+        ReplyToCommand(iClient, "[SM] You have exited your bumper car.");
         return false;
     }
-    if (!TryEnterCar(client))
+    if (!TryEnterCar(iClient))
     {
-        ReplyToCommand(client, "[SM] You can't ride a bumper car in your current state.");
+        ReplyToCommand(iClient, "[SM] You can't ride a bumper car in your current state.");
         return false;
     }
-    ReplyToCommand(client, "[SM] You are now riding a bumper car!");
+    ReplyToCommand(iClient, "[SM] You are now riding a bumper car!");
     return true;
 }
 
-stock ForcePlayerViewAngles(client, Float:ang[3])
+stock bool:TryEnterCar(iClient)
 {
-    new Handle:bf = StartMessageOne("ForcePlayerViewAngles", client);
+    if (IsValidClient(iClient) && IsPlayerAlive(iClient) && !TF2_IsPlayerInCondition(iClient, TFCond:_SwimmingCurse) && !TF2_IsPlayerInCondition(iClient, TFCond_HalloweenGhostMode) && !TF2_IsPlayerInCondition(iClient, TFCond_Taunting) && !TF2_IsPlayerInCondition(iClient, TFCond_HalloweenThriller))
+    {
+        if ((g_iCatTeam == 2 || g_iCatTeam == 3) && GetClientTeam(iClient) != g_iCatTeam)
+        {
+            return false;
+        }
+        decl Float:vAng[3];
+        GetClientEyeAngles(iClient, vAng);
+        TF2_AddCondition(iClient, TFCond:_HalloweenKart);
+        ForcePlayerViewAngles(iClient, vAng);
+        if (g_iCarPctDamage == -1) // Probably don't really need to check this.
+        {
+            SetEntProp(iClient, Prop_Send, "m_iKartHealth", GetConVarInt(g_cvCarInitPctDmg));
+        }
+        return true;
+    }
+    return false;
+}
+
+stock ForcePlayerViewAngles(iClient, Float:vAng[3]) // TODO: Base this off of the info_player_teamspawn under you.
+{
+    new Handle:bf = StartMessageOne("ForcePlayerViewAngles", iClient);
     BfWriteByte(bf, 1);
-    BfWriteByte(bf, client);
-    BfWriteAngles(bf, ang);
+    BfWriteByte(bf, iClient);
+    BfWriteAngles(bf, vAng);
     EndMessage();
 }
 
-stock bool:IsValidClient(client)
+stock bool:IsValidClient(iClient)
 {
-    if (client <= 0 || client > MaxClients || !IsClientInGame(client)) return false;
-    if (IsClientSourceTV(client) || IsClientReplay(client)) return false;
-    if (GetEntProp(client, Prop_Send, "m_bIsCoaching")) return false;
-    return true;
+    return (0 < iClient && iClient <= MaxClients
+        && IsClientInGame(iClient)
+        && !IsClientReplay(iClient)
+        && !IsClientSourceTV(iClient)
+        && !GetEntProp(iClient, Prop_Send, "m_bIsCoaching")
+    );
 }
 
 stock PrecacheKart() //void CTFPlayer::PrecacheKart()
@@ -834,4 +940,22 @@ stock FindStringIndex2(tableidx, const String:str[])
     }
 
     return INVALID_STRING_INDEX;
+}
+
+stock FindEntityByClassname2(startEnt, const String:classname[])
+{
+    while (startEnt > -1 && !IsValidEntity(startEnt))
+    {
+        startEnt--;
+    }
+
+    return FindEntityByClassname(startEnt, classname);
+}
+
+stock RemoveCond(iClient, TFCond:iCond)
+{
+    if (TF2_IsPlayerInCondition(iClient, iCond))
+    {
+        TF2_RemoveCondition(iClient, iCond);
+    }
 }
