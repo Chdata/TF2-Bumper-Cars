@@ -62,69 +62,69 @@ public OnPluginStart()
     CreateConVar(
         "cv_bumpercar_version", PLUGIN_VERSION,
         "Bumpercar Version",
-        FCVAR_REPLICATED|FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_DONTRECORD|FCVAR_NOTIFY
+        FCVAR_REPLICATED|FCVAR_SPONLY|FCVAR_DONTRECORD|FCVAR_NOTIFY
     );
 
     g_cvTeamOnly = CreateConVar(
         "cv_bumpercar_teamonly", "0",
         "0 = Anyone can enter bumper cars | 2 = Only red | 3 = Only blu | Anything else = Anyone can",
-        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        FCVAR_NOTIFY,
         true, 0.0, true, 3.0
     );
 
     g_cvHeadScale = CreateConVar(
         "cv_bumpercar_headscale", "1.0",
         "Player head scale when put into a bumper car.",
-        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        FCVAR_NOTIFY,
         true, 0.1, true, 3.0
     );
 
     g_cvKeepCar = CreateConVar(
         "cv_bumpercar_respawn", "1",
         "1 = Keep car on respawn | 0 = Lose car after death | 2 = Everyone automagically spawns in a car all the time unless cv_bumpercar_teamonly disables a team",
-        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        FCVAR_NOTIFY,
         true, 0.0, true, 2.0
     );
 
     g_cvCanSuicide = CreateConVar(
         "cv_bumpercar_suicide", "1",
         "1 = people in car can suicide | 0 = cannot suicide",
-        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        FCVAR_NOTIFY,
         true, 0.0, true, 1.0
     );
 
     g_cvToggleOnSpawn = CreateConVar(
         "cv_bumpercar_spawntoggle", "0",
         "1 = have to respawn to enter/exit car | 0 = can enter/exit car at any time - don't need to respawn",
-        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        FCVAR_NOTIFY,
         true, 0.0, true, 1.0
     );
 
     g_cvHardStop = CreateConVar(
         "cv_bumpercar_backstop", "1",
         "1 = +back cancels speed boost | 0 = +back does not cancel speed boost",
-        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        FCVAR_NOTIFY,
         true, 0.0, true, 1.0
     );
 
     g_cvCarNoTakeDamage = CreateConVar(
         "cv_bumpercar_blockplayerdmg", "1",
         "1 = enable damage block for non-drivers attacking drivers | 0 = no damage block, non-drivers can damage and kill drivers",
-        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        FCVAR_NOTIFY,
         true, 0.0, true, 1.0
     );
 
     g_cvCarPctDamage = CreateConVar(
         "cv_bumpercar_percent", "-1",
         "-1 = (anything negative) car damage acts like it normally does | 0+ (anything non-negative) car damage percentage stays at this integer all the time",
-        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        FCVAR_NOTIFY,
         true, -1.0, true, 999999.0
     );
 
     g_cvCarInitPctDmg = CreateConVar(
         "cv_bumpercar_initpct", "0",
         "An amount of damage cars start with on spawn. Only applies if cv_bumpercar_percent is -1.",
-        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        FCVAR_NOTIFY,
         true, 0.0, true, 999999.0
     );
 
