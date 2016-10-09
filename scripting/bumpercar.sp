@@ -12,7 +12,7 @@
 #include <tf2_stocks>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION "0x0D"
+#define PLUGIN_VERSION "0x0E"
 
 new Handle:g_cvTeamOnly;
 new g_iCatTeam;
@@ -28,6 +28,9 @@ new Handle:g_cvCanSuicide;
 
 new Handle:g_cvToggleOnSpawn;
 //new bool:g_bToggleOnSpawn;
+
+new Handle:g_cvUseAnimations;
+new g_iUseAnimation;
 
 new Handle:g_cvHardStop;
 new bool:g_bHardStop;
@@ -100,6 +103,14 @@ public OnPluginStart()
         true, 0.0, true, 1.0
     );
 
+    g_cvUseAnimations = CreateConVar(
+        "cv_bumpercar_useanim", "0",
+        "2 = animation and enter/exit only allowed on ground | 1 = enable enter/exit animations | 0 = no animations",
+        FCVAR_NOTIFY,
+        true, 0.0, true, 2.0
+    );
+    g_iUseAnimation = GetConVarInt(g_cvUseAnimations);
+
     g_cvHardStop = CreateConVar(
         "cv_bumpercar_backstop", "1",
         "1 = +back cancels speed boost | 0 = +back does not cancel speed boost",
@@ -136,6 +147,7 @@ public OnPluginStart()
     HookConVarChange(g_cvHardStop, CvarChange);
     HookConVarChange(g_cvCarNoTakeDamage, CvarChange);
     HookConVarChange(g_cvCarPctDamage, CvarChange);
+    HookConVarChange(g_cvUseAnimations, CvarChange);
     HookConVarChange(FindConVar("tf_halloween_kart_boost_duration"), CvarChange);
 
     HookEvent("player_spawn", OnPlayerSpawn);
@@ -228,6 +240,10 @@ public CvarChange(Handle:hCvar, const String:oldValue[], const String:newValue[]
     else if (hCvar == FindConVar("tf_halloween_kart_boost_duration"))
     {
         g_flBoostTime = GetConVarFloat(hCvar);
+    }
+    else if (hCvar == g_cvUseAnimations)
+    {
+    	g_iUseAnimation = GetConVarInt(g_cvUseAnimations);
     }
 }
 
@@ -639,6 +655,10 @@ public Action:cmdBumperCar(client, argc)
                     if (!bToggleOnSpawn && IsValidClient(target_list[i]) && IsPlayerAlive(target_list[i]))
                     {
                         TF2_RemoveCondition(target_list[i], TFCond_HalloweenKart);
+                        if (g_iUseAnimation) {
+                        	AnimateClientCar(target_list[i], true);
+                        	TF2_AddCondition(target_list[i], TFCond_HalloweenKart, 0.6);
+                        }
                     }
                     g_bKeepCar[target_list[i]] = false;
                     g_bWasDriving[target_list[i]] = false;
@@ -724,6 +744,10 @@ stock bool:SelfEnterCar(iClient) // , iOn=-1
     if (bIsInKart)
     {
         TF2_RemoveCondition(iClient, TFCond_HalloweenKart);
+        if (g_iUseAnimation) {
+        	AnimateClientCar(iClient, true);
+        	TF2_AddCondition(iClient, TFCond_HalloweenKart, 0.6);
+        }
         ReplyToCommand(iClient, "[SM] You have exited your bumper car.");
         return false;
     }
@@ -744,6 +768,10 @@ stock bool:TryEnterCar(iClient)
         {
             return false;
         }
+        if (g_iUseAnimation == 2 && !(GetEntityFlags(iClient) & FL_ONGROUND))
+        {
+        	return false;
+        }
         decl Float:vAng[3];
         GetClientEyeAngles(iClient, vAng);
         TF2_AddCondition(iClient, TFCond_HalloweenKart);
@@ -752,9 +780,26 @@ stock bool:TryEnterCar(iClient)
         {
             SetEntProp(iClient, Prop_Send, "m_iKartHealth", GetConVarInt(g_cvCarInitPctDmg));
         }
+        if (g_iUseAnimation)
+        {
+        	AnimateClientCar(iClient, false);
+        }
         return true;
     }
     return false;
+}
+#define PLAYERANIMEVENT_CUSTOM_SEQUENCE 21
+stock AnimateClientCar(iClient, bool bExit)
+{
+	static iEnterSequences[] = {-1, 329, 294, 378, 290, 229, 278, 286, 293, 368};
+	static iExitSequences[] = {-1, 334, 299, 383, 295, 234, 283, 291, 298, 373};
+	int class = view_as<int>(TF2_GetPlayerClass(iClient));
+	TF2_AddCondition(iClient, TFCond_HalloweenKartNoTurn, 1.3);
+	TE_Start("PlayerAnimEvent");
+	TE_WriteNum("m_iPlayerIndex", iClient);
+	TE_WriteNum("m_iEvent", PLAYERANIMEVENT_CUSTOM_SEQUENCE);
+	TE_WriteNum("m_nData", bExit ? iExitSequences[class] : iEnterSequences[class]);
+	TE_SendToAll();
 }
 
 stock ForcePlayerViewAngles(iClient, Float:vAng[3]) // TODO: Base this off of the info_player_teamspawn under you.
