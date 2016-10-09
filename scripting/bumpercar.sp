@@ -657,7 +657,7 @@ public Action:cmdBumperCar(client, argc)
                         TF2_RemoveCondition(target_list[i], TFCond_HalloweenKart);
                         if (g_iUseAnimation) {
                         	AnimateClientCar(target_list[i], true);
-                        	TF2_AddCondition(target_list[i], TFCond_HalloweenKart, 0.6);
+                        	TF2_AddCondition(target_list[i], TFCond_HalloweenKart, 0.8);
                         }
                     }
                     g_bKeepCar[target_list[i]] = false;
@@ -746,7 +746,7 @@ stock bool:SelfEnterCar(iClient) // , iOn=-1
         TF2_RemoveCondition(iClient, TFCond_HalloweenKart);
         if (g_iUseAnimation) {
         	AnimateClientCar(iClient, true);
-        	TF2_AddCondition(iClient, TFCond_HalloweenKart, 0.6);
+        	TF2_AddCondition(iClient, TFCond_HalloweenKart, 0.8);
         }
         ReplyToCommand(iClient, "[SM] You have exited your bumper car.");
         return false;
@@ -794,7 +794,7 @@ stock AnimateClientCar(iClient, bool bExit)
 	static iEnterSequences[] = {-1, 329, 294, 378, 290, 229, 278, 286, 293, 368};
 	static iExitSequences[] = {-1, 334, 299, 383, 295, 234, 283, 291, 298, 373};
 	int class = view_as<int>(TF2_GetPlayerClass(iClient));
-	TF2_AddCondition(iClient, TFCond_HalloweenKartNoTurn, 1.3);
+	TF2_AddCondition(iClient, TFCond_HalloweenKartNoTurn, bExit ? 0.8 : 1.3);
 	TE_Start("PlayerAnimEvent");
 	TE_WriteNum("m_iPlayerIndex", iClient);
 	TE_WriteNum("m_iEvent", PLAYERANIMEVENT_CUSTOM_SEQUENCE);
