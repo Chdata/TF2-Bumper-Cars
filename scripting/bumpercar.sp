@@ -91,7 +91,7 @@ public OnPluginStart()
 
     g_cvCanSuicide = CreateConVar(
         "cv_bumpercar_suicide", "1",
-        "1 = people in car can suicide | 0 = cannot suicide",
+        "1 = Fix car players being unable to suicide | 0 = Do not apply the suicide fix",
         FCVAR_NOTIFY,
         true, 0.0, true, 1.0
     );
@@ -154,8 +154,6 @@ public OnPluginStart()
     HookEvent("teamplay_round_start", OnRoundStart, EventHookMode_PostNoCopy);
     AddCommandListener(DoSuicide, "explode");
     AddCommandListener(DoSuicide, "kill");
-    AddCommandListener(DoSuicide2, "jointeam");
-    AddCommandListener(DoSuicide3, "autoteam");
 
     AutoExecConfig(true, "ch.bumpercar");
 
@@ -377,28 +375,9 @@ stock FixSpawnOrientation(iClient)
 
 public Action:DoSuicide(iClient, const String:sCommand[], iArgc)
 {
-    if (GetConVarBool(g_cvCanSuicide))
+    if (GetConVarBool(g_cvCanSuicide) && TF2_IsPlayerInCondition(iClient, TFCond_HalloweenKart))
     {                                  // Hale can suicide too
         SDKHooks_TakeDamage(iClient, 0, 0, 40000.0, (sCommand[0] == 'e' ? DMG_BLAST : DMG_GENERIC)|DMG_PREVENT_PHYSICS_FORCE); // e for EXPLODE
-        return Plugin_Handled;
-    }
-    return Plugin_Continue;
-}
-
-public Action:DoSuicide2(iClient, const String:sCommand[], iArgc)
-{
-    if (GetClientTeam(iClient) != StringToInt(sCommand[9]))
-    {
-        SDKHooks_TakeDamage(iClient, 0, 0, 40000.0, DMG_GENERIC|DMG_PREVENT_PHYSICS_FORCE); // Yeah I borrowed this from McKay cause ForcePlayerSuicide doesn't seem to work here
-    }
-    return Plugin_Continue;
-}
-
-public Action:DoSuicide3(iClient, const String:sCommand[], iArgc)
-{
-    if (TF2_IsPlayerInCondition(iClient, TFCond_HalloweenKart))
-    {
-        SDKHooks_TakeDamage(iClient, 0, 0, 40000.0, DMG_GENERIC|DMG_PREVENT_PHYSICS_FORCE);
         return Plugin_Handled;
     }
     return Plugin_Continue;
