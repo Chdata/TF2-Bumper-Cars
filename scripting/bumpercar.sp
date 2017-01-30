@@ -794,8 +794,8 @@ stock AnimateClientCar(iClient, bool bExit)
 {
 	static float flEnterDuration = 1.55;
 	static float flExitDuration = 0.8;
-	static iEnterSequences[] = {-1, 329, 294, 378, 290, 229, 278, 286, 293, 368};
-	static iExitSequences[] = {-1, 334, 299, 383, 295, 234, 283, 291, 298, 373};
+	static iEnterSequences[] = {-1, 329, 294, 378, 290, 229, 280, 286, 293, 370};
+	static iExitSequences[] = {-1, 334, 299, 383, 295, 234, 285, 291, 298, 375};
 	int class = view_as<int>(TF2_GetPlayerClass(iClient));
 	if (bExit)
 	{
