@@ -12,7 +12,7 @@
 #include <tf2_stocks>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION "0x0D"
+#define PLUGIN_VERSION "0x0E"
 
 new Handle:g_cvTeamOnly;
 new g_iCatTeam;
@@ -28,6 +28,9 @@ new Handle:g_cvCanSuicide;
 
 new Handle:g_cvToggleOnSpawn;
 //new bool:g_bToggleOnSpawn;
+
+new Handle:g_cvUseAnimations;
+new g_iUseAnimation;
 
 new Handle:g_cvHardStop;
 new bool:g_bHardStop;
@@ -62,69 +65,77 @@ public OnPluginStart()
     CreateConVar(
         "cv_bumpercar_version", PLUGIN_VERSION,
         "Bumpercar Version",
-        FCVAR_REPLICATED|FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_DONTRECORD|FCVAR_NOTIFY
+        FCVAR_REPLICATED|FCVAR_SPONLY|FCVAR_DONTRECORD|FCVAR_NOTIFY
     );
 
     g_cvTeamOnly = CreateConVar(
         "cv_bumpercar_teamonly", "0",
         "0 = Anyone can enter bumper cars | 2 = Only red | 3 = Only blu | Anything else = Anyone can",
-        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        FCVAR_NOTIFY,
         true, 0.0, true, 3.0
     );
 
     g_cvHeadScale = CreateConVar(
         "cv_bumpercar_headscale", "1.0",
         "Player head scale when put into a bumper car.",
-        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        FCVAR_NOTIFY,
         true, 0.1, true, 3.0
     );
 
     g_cvKeepCar = CreateConVar(
         "cv_bumpercar_respawn", "1",
         "1 = Keep car on respawn | 0 = Lose car after death | 2 = Everyone automagically spawns in a car all the time unless cv_bumpercar_teamonly disables a team",
-        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        FCVAR_NOTIFY,
         true, 0.0, true, 2.0
     );
 
     g_cvCanSuicide = CreateConVar(
         "cv_bumpercar_suicide", "1",
         "1 = people in car can suicide | 0 = cannot suicide",
-        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        FCVAR_NOTIFY,
         true, 0.0, true, 1.0
     );
 
     g_cvToggleOnSpawn = CreateConVar(
         "cv_bumpercar_spawntoggle", "0",
         "1 = have to respawn to enter/exit car | 0 = can enter/exit car at any time - don't need to respawn",
-        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        FCVAR_NOTIFY,
         true, 0.0, true, 1.0
     );
+
+    g_cvUseAnimations = CreateConVar(
+        "cv_bumpercar_useanim", "0",
+        "2 = animation and enter/exit only allowed on ground | 1 = enable enter/exit animations | 0 = no animations",
+        FCVAR_NOTIFY,
+        true, 0.0, true, 2.0
+    );
+    g_iUseAnimation = GetConVarInt(g_cvUseAnimations);
 
     g_cvHardStop = CreateConVar(
         "cv_bumpercar_backstop", "1",
         "1 = +back cancels speed boost | 0 = +back does not cancel speed boost",
-        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        FCVAR_NOTIFY,
         true, 0.0, true, 1.0
     );
 
     g_cvCarNoTakeDamage = CreateConVar(
         "cv_bumpercar_blockplayerdmg", "1",
         "1 = enable damage block for non-drivers attacking drivers | 0 = no damage block, non-drivers can damage and kill drivers",
-        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        FCVAR_NOTIFY,
         true, 0.0, true, 1.0
     );
 
     g_cvCarPctDamage = CreateConVar(
         "cv_bumpercar_percent", "-1",
         "-1 = (anything negative) car damage acts like it normally does | 0+ (anything non-negative) car damage percentage stays at this integer all the time",
-        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        FCVAR_NOTIFY,
         true, -1.0, true, 999999.0
     );
 
     g_cvCarInitPctDmg = CreateConVar(
         "cv_bumpercar_initpct", "0",
         "An amount of damage cars start with on spawn. Only applies if cv_bumpercar_percent is -1.",
-        FCVAR_PLUGIN|FCVAR_NOTIFY,
+        FCVAR_NOTIFY,
         true, 0.0, true, 999999.0
     );
 
@@ -136,6 +147,7 @@ public OnPluginStart()
     HookConVarChange(g_cvHardStop, CvarChange);
     HookConVarChange(g_cvCarNoTakeDamage, CvarChange);
     HookConVarChange(g_cvCarPctDamage, CvarChange);
+    HookConVarChange(g_cvUseAnimations, CvarChange);
     HookConVarChange(FindConVar("tf_halloween_kart_boost_duration"), CvarChange);
 
     HookEvent("player_spawn", OnPlayerSpawn);
@@ -228,6 +240,10 @@ public CvarChange(Handle:hCvar, const String:oldValue[], const String:newValue[]
     else if (hCvar == FindConVar("tf_halloween_kart_boost_duration"))
     {
         g_flBoostTime = GetConVarFloat(hCvar);
+    }
+    else if (hCvar == g_cvUseAnimations)
+    {
+    	g_iUseAnimation = GetConVarInt(g_cvUseAnimations);
     }
 }
 
@@ -639,6 +655,10 @@ public Action:cmdBumperCar(client, argc)
                     if (!bToggleOnSpawn && IsValidClient(target_list[i]) && IsPlayerAlive(target_list[i]))
                     {
                         TF2_RemoveCondition(target_list[i], TFCond_HalloweenKart);
+                        if (g_iUseAnimation)
+                        {
+                        	AnimateClientCar(target_list[i], true);
+                        }
                     }
                     g_bKeepCar[target_list[i]] = false;
                     g_bWasDriving[target_list[i]] = false;
@@ -724,6 +744,10 @@ stock bool:SelfEnterCar(iClient) // , iOn=-1
     if (bIsInKart)
     {
         TF2_RemoveCondition(iClient, TFCond_HalloweenKart);
+        if (g_iUseAnimation)
+        {
+        	AnimateClientCar(iClient, true);
+        }
         ReplyToCommand(iClient, "[SM] You have exited your bumper car.");
         return false;
     }
@@ -744,6 +768,10 @@ stock bool:TryEnterCar(iClient)
         {
             return false;
         }
+        if (g_iUseAnimation == 2 && !(GetEntityFlags(iClient) & FL_ONGROUND))
+        {
+        	return false;
+        }
         decl Float:vAng[3];
         GetClientEyeAngles(iClient, vAng);
         TF2_AddCondition(iClient, TFCond_HalloweenKart);
@@ -752,9 +780,33 @@ stock bool:TryEnterCar(iClient)
         {
             SetEntProp(iClient, Prop_Send, "m_iKartHealth", GetConVarInt(g_cvCarInitPctDmg));
         }
+        if (g_iUseAnimation)
+        {
+        	AnimateClientCar(iClient, false);
+        }
         return true;
     }
     return false;
+}
+
+#define PLAYERANIMEVENT_CUSTOM_SEQUENCE 21
+stock AnimateClientCar(iClient, bool bExit)
+{
+	static float flEnterDuration = 1.55;
+	static float flExitDuration = 0.8;
+	static iEnterSequences[] = {-1, 329, 294, 378, 290, 229, 280, 286, 293, 370};
+	static iExitSequences[] = {-1, 334, 299, 383, 295, 234, 285, 291, 298, 375};
+	int class = view_as<int>(TF2_GetPlayerClass(iClient));
+	if (bExit)
+	{
+		TF2_AddCondition(iClient, TFCond_HalloweenKart, flExitDuration - 0.12);
+	}
+	TF2_AddCondition(iClient, TFCond_HalloweenKartNoTurn, bExit ? flExitDuration : flEnterDuration);
+	TE_Start("PlayerAnimEvent");
+	TE_WriteNum("m_iPlayerIndex", iClient);
+	TE_WriteNum("m_iEvent", PLAYERANIMEVENT_CUSTOM_SEQUENCE);
+	TE_WriteNum("m_nData", bExit ? iExitSequences[class] : iEnterSequences[class]);
+	TE_SendToAll();
 }
 
 stock ForcePlayerViewAngles(iClient, Float:vAng[3]) // TODO: Base this off of the info_player_teamspawn under you.
