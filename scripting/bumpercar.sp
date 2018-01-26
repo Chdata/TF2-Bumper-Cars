@@ -471,10 +471,12 @@ public Action:OnPlayerRunCmd(iClient, &iButtons, &iImpulse, Float:vVel[3], Float
 {
     static int iLastButtons[MAXPLAYERS + 1];
     static float flLastHonk[MAXPLAYERS + 1];
-    if (!IsPlayerAlive(iClient)) {
+    if (!IsClientInGame(iClient) || !IsPlayerAlive(iClient)) {
+        flLastHonk[iClient] = 0.0;
         return Plugin_Continue;
     }
     if (!TF2_IsPlayerInCondition(iClient, TFCond_HalloweenKart)) {
+        flLastHonk[iClient] = 0.0;
         return Plugin_Continue;
     }
     float flGameTime = GetGameTime();
