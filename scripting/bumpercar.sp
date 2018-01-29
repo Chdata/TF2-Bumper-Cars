@@ -264,13 +264,7 @@ public Action:OnTakeDamage(iVictim, &iAtker, &iInflictor, &Float:flDamage, &iDmg
             return Plugin_Changed;
         }
 
-        decl String:s[16];
-        GetEdictClassname(iAtker, s, sizeof(s));
-        if (StrEqual(s, "trigger_hurt", false))
-        {
-            SDKHooks_TakeDamage(iVictim, iAtker, iAtker, 40000.0, DMG_GENERIC|DMG_PREVENT_PHYSICS_FORCE);
-        }
-        /*else if (IsValidClient(iAtker) && !TF2_IsPlayerInCondition(iVictim, TFCond_HalloweenKart) && TF2_IsPlayerInCondition(iAtker, TFCond_HalloweenKart))
+        /*if (IsValidClient(iAtker) && !TF2_IsPlayerInCondition(iVictim, TFCond_HalloweenKart) && TF2_IsPlayerInCondition(iAtker, TFCond_HalloweenKart))
         {
             flDamage *= 2.0;
             return Plugin_Changed;      // Carts don't seem to trigger OnTakeDamage when they deal "percentage damage"
