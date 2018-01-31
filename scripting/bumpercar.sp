@@ -474,7 +474,7 @@ public Action:OnPlayerRunCmd(iClient, &iButtons, &iImpulse, Float:vVel[3], Float
         return Plugin_Continue;
     }
     float flGameTime = GetGameTime();
-    if ((iButtons & IN_ATTACK) && !(iLastButtons[iClient] & IN_ATTACK)) {
+    if ((iButtons & IN_ATTACK) && !(iLastButtons[iClient] & IN_ATTACK) && !TF2_IsPlayerInCondition(iClient, TFCond_HalloweenKartCage)) {
         if (flGameTime >= flLastHonk[iClient] + 3.0) {
             DoHonk(iClient);
             flLastHonk[iClient] = flGameTime;
@@ -809,11 +809,25 @@ stock DoHonk(iClient) {
     TE_WriteNum("m_iEvent", PLAYERANIMEVENT_CUSTOM_SEQUENCE);
     TE_WriteNum("m_nData", iHonkSequences[class]);
     TE_SendToAll();
-    CreateTimer(0.4, Timer_HonkSound, GetClientUserId(iClient), TIMER_FLAG_NO_MAPCHANGE);
-    CreateTimer(0.8, Timer_HonkSound, GetClientUserId(iClient), TIMER_FLAG_NO_MAPCHANGE);
+    CreateTimer(0.38, Timer_HonkSound1, GetClientUserId(iClient), TIMER_FLAG_NO_MAPCHANGE);
+    CreateTimer(0.73, Timer_HonkSound2, GetClientUserId(iClient), TIMER_FLAG_NO_MAPCHANGE);
 }
 
-public Action Timer_HonkSound(Handle timer, any userid) {
+public Action Timer_HonkSound1(Handle timer, any userid) {
+    int iClient = GetClientOfUserId(userid);
+    if (!IsClientInGame(iClient) || !IsPlayerAlive(iClient)) {
+        return Plugin_Stop;
+    }
+    EmitSoundToAll(")player/taunt_bumper_car_horn.wav",
+        iClient,
+        SNDCHAN_WEAPON, //both sounds do not play if not enough time between them on same channel, so set this to WEAPON instead of STATIC
+        74,
+        SND_CHANGEVOL,
+        0.5);
+    return Plugin_Stop;
+}
+
+public Action Timer_HonkSound2(Handle timer, any userid) {
     int iClient = GetClientOfUserId(userid);
     if (!IsClientInGame(iClient) || !IsPlayerAlive(iClient)) {
         return Plugin_Stop;
