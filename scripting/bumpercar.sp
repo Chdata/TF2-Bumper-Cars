@@ -12,7 +12,7 @@
 #include <tf2_stocks>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION "0x0E"
+#define PLUGIN_VERSION "0x0F"
 
 new Handle:g_cvTeamOnly;
 new g_iCatTeam;
@@ -241,7 +241,7 @@ public CvarChange(Handle:hCvar, const String:oldValue[], const String:newValue[]
     }
     else if (hCvar == g_cvUseAnimations)
     {
-    	g_iUseAnimation = GetConVarInt(g_cvUseAnimations);
+        g_iUseAnimation = GetConVarInt(g_cvUseAnimations);
     }
 }
 
@@ -264,13 +264,7 @@ public Action:OnTakeDamage(iVictim, &iAtker, &iInflictor, &Float:flDamage, &iDmg
             return Plugin_Changed;
         }
 
-        decl String:s[16];
-        GetEdictClassname(iAtker, s, sizeof(s));
-        if (StrEqual(s, "trigger_hurt", false))
-        {
-            SDKHooks_TakeDamage(iVictim, iAtker, iAtker, 40000.0, DMG_GENERIC|DMG_PREVENT_PHYSICS_FORCE);
-        }
-        /*else if (IsValidClient(iAtker) && !TF2_IsPlayerInCondition(iVictim, TFCond_HalloweenKart) && TF2_IsPlayerInCondition(iAtker, TFCond_HalloweenKart))
+        /*if (IsValidClient(iAtker) && !TF2_IsPlayerInCondition(iVictim, TFCond_HalloweenKart) && TF2_IsPlayerInCondition(iAtker, TFCond_HalloweenKart))
         {
             flDamage *= 2.0;
             return Plugin_Changed;      // Carts don't seem to trigger OnTakeDamage when they deal "percentage damage"
@@ -364,7 +358,7 @@ stock FixSpawnOrientation(iClient)
     {
         return;
     }
-    
+
     vPos1[2] += 10.0;       // I do this because on some maps, spawning in a car spams repeated noises until you jump.
     vAng[0] += 10.0;        // It seems like not setting this sometimes makes your view go under the ground
     TeleportEntity(iClient, vPos1, vAng, NULL_VECTOR);
@@ -469,18 +463,32 @@ public TF2_OnConditionRemoved(iClient, TFCond:iCond)
 
 public Action:OnPlayerRunCmd(iClient, &iButtons, &iImpulse, Float:vVel[3], Float:vAng[3], &hWeapon)
 {
-    if (iButtons & IN_BACK)
-    {
-        if (g_bHardStop && TF2_IsPlayerInCondition(iClient, TFCond_HalloweenKartDash)) // Without the check, this is spammy
-        {
-            TF2_RemoveCondition(iClient, TFCond_HalloweenKartDash);
-
-            if (g_flBoostTime == -1.0)
-            {
-                SetEntPropFloat(iClient, Prop_Send, "m_flKartNextAvailableBoost", GetGameTime()+1.5);
-            }
+    static int iLastButtons[MAXPLAYERS + 1];
+    static float flLastHonk[MAXPLAYERS + 1];
+    if (!IsClientInGame(iClient) || !IsPlayerAlive(iClient)) {
+        flLastHonk[iClient] = 0.0;
+        return Plugin_Continue;
+    }
+    if (!TF2_IsPlayerInCondition(iClient, TFCond_HalloweenKart)) {
+        flLastHonk[iClient] = 0.0;
+        return Plugin_Continue;
+    }
+    float flGameTime = GetGameTime();
+    if ((iButtons & IN_ATTACK) && !(iLastButtons[iClient] & IN_ATTACK) && !TF2_IsPlayerInCondition(iClient, TFCond_HalloweenKartCage)) {
+        if (flGameTime >= flLastHonk[iClient] + 3.0) {
+            DoHonk(iClient);
+            flLastHonk[iClient] = flGameTime;
         }
     }
+    //always check for the dash cond, else removecond gets spammed
+    if (g_bHardStop && (iButtons & IN_BACK) && TF2_IsPlayerInCondition(iClient, TFCond_HalloweenKartDash)) {
+        TF2_RemoveCondition(iClient, TFCond_HalloweenKartDash);
+        if (g_flBoostTime == -1.0) {
+            SetEntPropFloat(iClient, Prop_Send, "m_flKartNextAvailableBoost", flGameTime + 1.5);
+        }
+    }
+    iLastButtons[iClient] = iButtons;
+    return Plugin_Continue;
 }
 
 /*public PostCarEnable(any:iData)
@@ -488,7 +496,7 @@ public Action:OnPlayerRunCmd(iClient, &iButtons, &iImpulse, Float:vVel[3], Float
     new iClient = GetClientOfUserId(iData);
     if (IsValidClient(iClient))
     {
-        
+
     }
 }*/
 
@@ -507,8 +515,8 @@ public OnPostThinkPost(iClient)
         //{
         SetEntPropFloat(iClient, Prop_Send, "m_flHeadScale", g_flHeadScale);
         //}
-        
-        if (g_iCarPctDamage >= 0) 
+
+        if (g_iCarPctDamage >= 0)
         {
             SetEntProp(iClient, Prop_Send, "m_iKartHealth", g_iCarPctDamage);
         }
@@ -636,7 +644,7 @@ public Action:cmdBumperCar(client, argc)
                         TF2_RemoveCondition(target_list[i], TFCond_HalloweenKart);
                         if (g_iUseAnimation)
                         {
-                        	AnimateClientCar(target_list[i], true);
+                            AnimateClientCar(target_list[i], true);
                         }
                     }
                     g_bKeepCar[target_list[i]] = false;
@@ -725,7 +733,7 @@ stock bool:SelfEnterCar(iClient) // , iOn=-1
         TF2_RemoveCondition(iClient, TFCond_HalloweenKart);
         if (g_iUseAnimation)
         {
-        	AnimateClientCar(iClient, true);
+            AnimateClientCar(iClient, true);
         }
         ReplyToCommand(iClient, "[SM] You have exited your bumper car.");
         return false;
@@ -749,7 +757,7 @@ stock bool:TryEnterCar(iClient)
         }
         if (g_iUseAnimation == 2 && !(GetEntityFlags(iClient) & FL_ONGROUND))
         {
-        	return false;
+            return false;
         }
         decl Float:vAng[3];
         GetClientEyeAngles(iClient, vAng);
@@ -761,7 +769,7 @@ stock bool:TryEnterCar(iClient)
         }
         if (g_iUseAnimation)
         {
-        	AnimateClientCar(iClient, false);
+            AnimateClientCar(iClient, false);
         }
         return true;
     }
@@ -771,21 +779,66 @@ stock bool:TryEnterCar(iClient)
 #define PLAYERANIMEVENT_CUSTOM_SEQUENCE 21
 stock AnimateClientCar(iClient, bool bExit)
 {
-	static float flEnterDuration = 1.55;
-	static float flExitDuration = 0.8;
-	static iEnterSequences[] = {-1, 329, 294, 378, 290, 229, 280, 286, 293, 370};
-	static iExitSequences[] = {-1, 334, 299, 383, 295, 234, 285, 291, 298, 375};
-	int class = view_as<int>(TF2_GetPlayerClass(iClient));
-	if (bExit)
-	{
-		TF2_AddCondition(iClient, TFCond_HalloweenKart, flExitDuration - 0.12);
-	}
-	TF2_AddCondition(iClient, TFCond_HalloweenKartNoTurn, bExit ? flExitDuration : flEnterDuration);
-	TE_Start("PlayerAnimEvent");
-	TE_WriteNum("m_iPlayerIndex", iClient);
-	TE_WriteNum("m_iEvent", PLAYERANIMEVENT_CUSTOM_SEQUENCE);
-	TE_WriteNum("m_nData", bExit ? iExitSequences[class] : iEnterSequences[class]);
-	TE_SendToAll();
+    static float flEnterDuration = 1.55;
+    static float flExitDuration = 0.8;
+    static iEnterSequences[] = {-1, 332, 296, 382, 292, 231, 280, 315, 294, 370};
+    static iExitSequences[] = {-1, 337, 301, 387, 297, 236, 285, 320, 299, 375};
+    int class = view_as<int>(TF2_GetPlayerClass(iClient));
+    if (bExit)
+    {
+        TF2_AddCondition(iClient, TFCond_HalloweenKart, flExitDuration - 0.12);
+    }
+    TF2_AddCondition(iClient, TFCond_HalloweenKartNoTurn, bExit ? flExitDuration : flEnterDuration);
+    TE_Start("PlayerAnimEvent");
+    TE_WriteNum("m_hPlayer", EntIndexToEntRef(iClient) & ~(1<<31));
+    TE_WriteNum("m_iEvent", PLAYERANIMEVENT_CUSTOM_SEQUENCE);
+    TE_WriteNum("m_nData", bExit ? iExitSequences[class] : iEnterSequences[class]);
+    TE_SendToAll();
+    EmitSoundToAll(bExit ? ")player/taunt_bumper_car_quit.wav" : ")player/taunt_bumper_car_spawn.wav",
+        iClient,
+        bExit ? SNDCHAN_BODY : SNDCHAN_STATIC,
+        74,
+        SND_CHANGEVOL,
+        0.5);
+}
+stock DoHonk(iClient) {
+    static iHonkSequences[] = {-1, 335, 299, 385, 295, 234, 283, 318, 297, 373};
+    int class = view_as<int>(TF2_GetPlayerClass(iClient));
+    TE_Start("PlayerAnimEvent");
+    TE_WriteNum("m_hPlayer", EntIndexToEntRef(iClient) & ~(1<<31));
+    TE_WriteNum("m_iEvent", PLAYERANIMEVENT_CUSTOM_SEQUENCE);
+    TE_WriteNum("m_nData", iHonkSequences[class]);
+    TE_SendToAll();
+    CreateTimer(0.38, Timer_HonkSound1, GetClientUserId(iClient), TIMER_FLAG_NO_MAPCHANGE);
+    CreateTimer(0.73, Timer_HonkSound2, GetClientUserId(iClient), TIMER_FLAG_NO_MAPCHANGE);
+}
+
+public Action Timer_HonkSound1(Handle timer, any userid) {
+    int iClient = GetClientOfUserId(userid);
+    if (!IsClientInGame(iClient) || !IsPlayerAlive(iClient)) {
+        return Plugin_Stop;
+    }
+    EmitSoundToAll(")player/taunt_bumper_car_horn.wav",
+        iClient,
+        SNDCHAN_WEAPON, //both sounds do not play if not enough time between them on same channel, so set this to WEAPON instead of STATIC
+        74,
+        SND_CHANGEVOL,
+        0.5);
+    return Plugin_Stop;
+}
+
+public Action Timer_HonkSound2(Handle timer, any userid) {
+    int iClient = GetClientOfUserId(userid);
+    if (!IsClientInGame(iClient) || !IsPlayerAlive(iClient)) {
+        return Plugin_Stop;
+    }
+    EmitSoundToAll(")player/taunt_bumper_car_horn.wav",
+        iClient,
+        SNDCHAN_STATIC,
+        74,
+        SND_CHANGEVOL,
+        0.5);
+    return Plugin_Stop;
 }
 
 stock ForcePlayerViewAngles(iClient, Float:vAng[3]) // TODO: Base this off of the info_player_teamspawn under you.
@@ -841,7 +894,12 @@ stock PrecacheKart() //void CTFPlayer::PrecacheKart()
     PrecacheSound(")weapons/bumper_car_spawn_from_lava.wav");
     PrecacheSound(")weapons/bumper_car_speed_boost_start.wav");
     PrecacheSound(")weapons/bumper_car_speed_boost_stop.wav");
-    
+
+    PrecacheSound(")player/taunt_bumper_car_horn.wav");
+    PrecacheSound(")player/taunt_bumper_car_spawn.wav");
+    PrecacheSound(")player/taunt_bumper_car_quit.wav");
+    PrecacheSound(")player/taunt_bumper_car_go_loop.wav");
+
     decl String:szSnd[64];
     for(new i = 1; i <= 8; i++)
     {
