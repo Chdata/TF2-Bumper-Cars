@@ -790,7 +790,7 @@ stock AnimateClientCar(iClient, bool bExit)
     }
     TF2_AddCondition(iClient, TFCond_HalloweenKartNoTurn, bExit ? flExitDuration : flEnterDuration);
     TE_Start("PlayerAnimEvent");
-    TE_WriteNum("m_iPlayerIndex", iClient);
+    TE_WriteNum("m_hPlayer", EntIndexToEntRef(iClient) & ~(1<<31));
     TE_WriteNum("m_iEvent", PLAYERANIMEVENT_CUSTOM_SEQUENCE);
     TE_WriteNum("m_nData", bExit ? iExitSequences[class] : iEnterSequences[class]);
     TE_SendToAll();
@@ -805,7 +805,7 @@ stock DoHonk(iClient) {
     static iHonkSequences[] = {-1, 335, 299, 385, 295, 234, 283, 318, 297, 373};
     int class = view_as<int>(TF2_GetPlayerClass(iClient));
     TE_Start("PlayerAnimEvent");
-    TE_WriteNum("m_iPlayerIndex", iClient);
+    TE_WriteNum("m_hPlayer", EntIndexToEntRef(iClient) & ~(1<<31));
     TE_WriteNum("m_iEvent", PLAYERANIMEVENT_CUSTOM_SEQUENCE);
     TE_WriteNum("m_nData", iHonkSequences[class]);
     TE_SendToAll();
